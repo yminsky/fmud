@@ -1,0 +1,4 @@
+syntax: glob
+_build
+*~
+.vscode/Icon\r

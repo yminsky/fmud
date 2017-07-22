@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(executables
+ ((names (nava))
+  (libraries (core async))
+  (preprocess (pps (ppx_jane)))
+  ))
