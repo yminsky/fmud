@@ -178,7 +178,7 @@ let looking w nick =
       ; String.concat ~sep:" and " descriptions ^ "."
       ]
   in
-  String.concat ~sep:" " (room.description :: people_description @ item_description)
+  room.description ^ String.concat ~sep:" " (people_description @ item_description)
 
 let takeing w nick item_name =
   let me = get_person w nick in
@@ -187,7 +187,7 @@ let takeing w nick item_name =
   in
   let item = List.find items_in_room ~f:(fun i -> item_name = i.name) in
   match item with
-  | None -> (w ,Send_message {nick; message = "Sorry" ^ nick ^ ". I don't see a " ^ item_name} :: [])
+  | None -> (w ,Send_message {nick; message = "Sorry " ^ nick ^ ". I don't see a " ^ item_name} :: [])
   | Some item ->
     let  new_items = {item with in_room = false; place = nick} :: drop_item item_name w.items in 
     let nw = { w with items = new_items } in
