@@ -2,11 +2,11 @@ open Core
 open Mudder
 
 (*
-████████ ██    ██ ██████  ███████ ███████
-   ██     ██  ██  ██   ██ ██      ██
-   ██      ████   ██████  █████   ███████
-   ██       ██    ██      ██           ██
-   ██       ██    ██      ███████ ███████
+   | ████████ ██    ██ ██████  ███████ ███████
+   |    ██     ██  ██  ██   ██ ██      ██
+   |    ██      ████   ██████  █████   ███████
+   |    ██       ██    ██      ██           ██
+   |    ██       ██    ██      ███████ ███████
 *)
 
 type door =
@@ -39,12 +39,12 @@ type world =
 
 
   (*
-  ████████ ███████ ██   ██ ████████
-     ██    ██       ██ ██     ██
-     ██    █████     ███      ██
-     ██    ██       ██ ██     ██
-     ██    ███████ ██   ██    ██
-   *)
+   | ████████ ███████ ██   ██ ████████
+   |    ██    ██       ██ ██     ██
+   |    ██    █████     ███      ██
+   |    ██    ██       ██ ██     ██
+   |    ██    ███████ ██   ██    ██
+*)
 
 let description = {|
   Hey! This is a MUD! Enjoy.
@@ -69,12 +69,12 @@ let help = {|
   |}
 
   (*
-   ██████   █████  ███    ███ ███████
-  ██       ██   ██ ████  ████ ██
-  ██   ███ ███████ ██ ████ ██ █████
-  ██    ██ ██   ██ ██  ██  ██ ██
-   ██████  ██   ██ ██      ██ ███████
-  *)
+   |  ██████   █████  ███    ███ ███████
+   | ██       ██   ██ ████  ████ ██
+   | ██   ███ ███████ ██ ████ ██ █████
+   | ██    ██ ██   ██ ██  ██  ██ ██
+   |  ██████  ██   ██ ██      ██ ███████
+*)
 
 (* Items *)
 
@@ -112,12 +112,12 @@ let init =
   }
 
 (*
-██   ██ ███████ ██      ██████  ███████ ██████  ███████
-██   ██ ██      ██      ██   ██ ██      ██   ██ ██
-███████ █████   ██      ██████  █████   ██████  ███████
-██   ██ ██      ██      ██      ██      ██   ██      ██
-██   ██ ███████ ███████ ██      ███████ ██   ██ ███████
- *)
+   | ██   ██ ███████ ██      ██████  ███████ ██████  ███████
+   | ██   ██ ██      ██      ██   ██ ██      ██   ██ ██
+   | ███████ █████   ██      ██████  █████   ██████  ███████
+   | ██   ██ ██      ██      ██      ██      ██   ██      ██
+   | ██   ██ ███████ ███████ ██      ███████ ██   ██ ███████
+*)
 
 let get_person w nick =
   List.find_exn w.people ~f:(fun p -> p.nick = nick)
@@ -139,11 +139,11 @@ let other_people_in_room w nick roomn =
   drop_nick nick (get_people_in_room w roomn)
 
 (*
- █████   ██████ ████████ ██  ██████  ███    ██ ███████
-██   ██ ██         ██    ██ ██    ██ ████   ██ ██
-███████ ██         ██    ██ ██    ██ ██ ██  ██ ███████
-██   ██ ██         ██    ██ ██    ██ ██  ██ ██      ██
-██   ██  ██████    ██    ██  ██████  ██   ████ ███████
+   |  █████   ██████ ████████ ██  ██████  ███    ██ ███████
+   | ██   ██ ██         ██    ██ ██    ██ ████   ██ ██
+   | ███████ ██         ██    ██ ██    ██ ██ ██  ██ ███████
+   | ██   ██ ██         ██    ██ ██    ██ ██  ██ ██      ██
+   | ██   ██  ██████    ██    ██  ██████  ██   ████ ███████
 *)
 
 let looking w nick =
@@ -151,24 +151,22 @@ let looking w nick =
   let roomn = room.name in
   let people_in_room = drop_nick nick (get_people_in_room w roomn) in
   let people_description =
-    if List.is_empty people_in_room then
-      [ "Nobody is in the room." ]
-    else
-      let names_in_room =
-        List.map people_in_room ~f:(fun p -> p.nick)
-      in
+    match people_in_room with
+    | [] -> [ "Nobody is in the room." ]
+    | _ ->
+      let names_in_room = List.map people_in_room ~f:(fun p -> p.nick) in
       [ "You see"
       ; String.concat ~sep:" and " names_in_room
       ]
   in
-  let items_in_room = List.filter w.items
-      ~f:(fun i ->i.in_room = true && i.place = roomn) in
+  let items_in_room = 
+    List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn) 
+  in
   let item_description =
-    if List.is_empty items_in_room then
-      []
-    else
-      let descriptions =
-        List.map items_in_room ~f:(fun i -> i.description) in
+    match items_in_room with
+    | [] -> []
+    | _ ->
+      let descriptions = List.map items_in_room ~f:(fun i -> i.description) in
       [ "You see"
       ; String.concat ~sep:" and " descriptions
       ]
@@ -216,7 +214,7 @@ let nick_added w nick =
   in
   let hello_messages =
     List.map w.people ~f:(fun p ->
-        Send_message {nick = p.nick; message = nick ^ " has arrived!"})
+      Send_message {nick = p.nick; message = nick ^ " has arrived!"})
   in
   let actions = welcome_message :: hello_messages in
   (nw,actions)
@@ -225,7 +223,7 @@ let nick_removed w nick =
   let nw = { w with people = other_people w nick } in
   let goodbye_message = nick ^ " has left the world." in
   let actions = List.map (other_people w nick) ~f:(fun p ->
-      Send_message { nick = p.nick; message = goodbye_message })
+    Send_message { nick = p.nick; message = goodbye_message })
   in
   (nw,actions)
 

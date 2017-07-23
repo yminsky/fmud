@@ -36,21 +36,21 @@ let rec remove_client (s:_ state) (h:_ handlers) (c:client) =
 
 and run_actions (s:_ state) (h:_ handlers) actions : unit Deferred.t =
   Deferred.List.iter actions ~f:(fun action ->
-      (* Debug output *)
-      print_endline (Sexp.to_string_hum (sexp_of_action action));
-      begin match action with
-      | Send_message { nick; message } ->
-        begin match Hashtbl.find s.clients nick with
-          | None -> ()
-          | Some c -> Writer.write_line c.w (String.strip message)
-        end;
-        Deferred.unit
-      | Kill_client { nick } ->
-        begin match Hashtbl.find s.clients nick with
-          | None -> Deferred.unit
-          | Some c -> remove_client s h c
-        end
-      end)
+    (* Debug output *)
+    print_endline (Sexp.to_string_hum (sexp_of_action action));
+    begin match action with
+    | Send_message { nick; message } ->
+      begin match Hashtbl.find s.clients nick with
+      | None -> ()
+      | Some c -> Writer.write_line c.w (String.strip message)
+      end;
+      Deferred.unit
+    | Kill_client { nick } ->
+      begin match Hashtbl.find s.clients nick with
+      | None -> Deferred.unit
+      | Some c -> remove_client s h c
+      end
+    end)
 
 let input_loop (s:_ state) (h:_ handlers) (c:client) =
   let rec loop () =
@@ -104,8 +104,8 @@ let start_mud h ~port =
           let%bind server = 
             Tcp.Server.create
               ~on_handler_error:(`Call (fun _addr exn ->
-                  print_endline @@ Sexp.to_string_hum @@
-                  [%message "Unexpected exception" ~_:(exn:Exn.t)]))
+                print_endline @@ Sexp.to_string_hum @@
+                [%message "Unexpected exception" ~_:(exn:Exn.t)]))
               (Tcp.on_port port) 
               (fun _addr -> handler)
           in

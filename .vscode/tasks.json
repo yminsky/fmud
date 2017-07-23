@@ -7,6 +7,10 @@
             "taskName": "build",
             "command": "jbuilder build nava.bc --dev",
             "type": "shell",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated"
+            },
             "problemMatcher": [
                 "$ocamlc"
             ],

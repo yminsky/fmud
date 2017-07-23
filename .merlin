@@ -28,9 +28,8 @@ PKG ppx_expect.config
 PKG ppx_hash.runtime-lib
 PKG ppx_inline_test.config
 PKG ppx_inline_test.runtime-lib
-PKG ppx_jane
+PKG protocol_version_header
 PKG sexplib
-PKG sexplib.0
 PKG sexplib.unix
 PKG spawn
 PKG stdio
