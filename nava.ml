@@ -18,6 +18,7 @@ type item =
   { in_room : bool
   ; place : string
   ; description : string
+  ; name : string
   }
 
 type person =
@@ -79,7 +80,8 @@ let help = {|
 
 let pebble = { in_room = true;
                place = "Welcome";
-               description = "a normal gray pebble."}
+               description = "a normal gray pebble";
+               name = "pebble"}
 (* Doors *)
 
 let n_welcome = { direction = "north"; destination = "Basic" }
@@ -137,6 +139,12 @@ let other_people w nick =
 let other_people_in_room w nick roomn =
   drop_nick nick (get_people_in_room w roomn)
 
+let items_in_room w roomn = 
+  List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn)   
+
+let drop_item name (items:item list) =
+  List.filter items ~f:(fun i -> not (i.name = name))
+
 (*
    |  █████   ██████ ████████ ██  ██████  ███    ██ ███████
    | ██   ██ ██         ██    ██ ██    ██ ████   ██ ██
@@ -155,7 +163,7 @@ let looking w nick =
     | _ ->
       let names_in_room = List.map people_in_room ~f:(fun p -> p.nick) in
       [ "You see"
-      ; String.concat ~sep:" and " names_in_room
+      ; String.concat ~sep:" and " names_in_room ^ "."
       ]
   in
   let items_in_room = 
@@ -167,10 +175,24 @@ let looking w nick =
     | _ ->
       let descriptions = List.map items_in_room ~f:(fun i -> i.description) in
       [ "You see"
-      ; String.concat ~sep:" and " descriptions
+      ; String.concat ~sep:" and " descriptions ^ "."
       ]
   in
   String.concat ~sep:" " (room.description :: people_description @ item_description)
+
+let takeing w nick item_name =
+  let me = get_person w nick in
+  let items_in_room = 
+    items_in_room w me.roomn
+  in
+  let item = List.find items_in_room ~f:(fun i -> item_name = i.name) in
+  match item with
+  | None -> (w ,Send_message {nick; message = "Sorry" ^ nick ^ ". I don't see a " ^ item_name} :: [])
+  | Some item ->
+    let  new_items = {item with in_room = false; place = nick} :: drop_item item_name w.items in 
+    let nw = { w with items = new_items } in
+    (nw, Send_message{nick; message = "Okay. You now have the " ^ item_name} :: [])
+;;
 
 let moving w nick direction =
   let me = List.find_exn w.people ~f:(fun p -> p.nick = nick) in
@@ -233,9 +255,10 @@ let handle_line w nick line =
   | "/help"  :: [] -> (w, [Send_message { nick;message = help }])
   | "/look"  :: [] -> (w, [Send_message { nick; message = looking w nick }])
   | "/move"  :: dir :: [] -> moving w nick dir
+  | "/take" :: name :: [] -> takeing w nick name
   | "/whisper" :: to_nick :: message ->
     (w, [Send_message { nick = to_nick  
-                      ; message = nick ^ " whispered: " ^ String.concat message }])
+                      ; message = nick ^ " whispered: " ^ String.concat ~sep:" " message }])
   | _ ->
     (* just show what was said to everyone in the same room *)
     let hearers =
