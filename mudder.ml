@@ -1,5 +1,5 @@
-open! Core
-open! Async
+open Core
+open Async
 
 type action =
   | Send_message of { nick: string; message: string }
@@ -27,8 +27,8 @@ type 'world state =
   }
 
 let rec remove_client (s:_ state) (h:_ handlers) (c:client) =
-  Writer.close c.w >>= fun () ->
-  Reader.close c.r >>= fun () ->
+  let%bind () = Writer.close c.w in
+  let%bind () = Reader.close c.r in
   Hashtbl.remove s.clients c.nick;
   let (new_world,actions) = h.nick_removed s.world c.nick in
   s.world <- new_world;
@@ -54,13 +54,12 @@ and run_actions (s:_ state) (h:_ handlers) actions : unit Deferred.t =
 
 let input_loop (s:_ state) (h:_ handlers) (c:client) =
   let rec loop () =
-    Monitor.try_with (fun () -> Reader.read_line c.r) >>= function
+    match%bind Monitor.try_with (fun () -> Reader.read_line c.r) with
     | Ok `Eof | Error _ -> remove_client s h c
     | Ok (`Ok line) ->
       let (new_world,actions) = h.handle_line s.world c.nick line in
       s.world <- new_world;
-      run_actions s h actions
-      >>= fun () ->
+      let%bind () = run_actions s h actions in
       loop ()
   in
   loop ()
@@ -74,12 +73,12 @@ let mud handlers =
      Writer.write_line w handlers.description;
      Writer.write w "nick: ";
      let close () =
-       Reader.close r >>= fun () ->
+       let%bind () = Reader.close r in
        Writer.close w
      in
-     Reader.read_line r >>= function
-     | `Eof ->  close ()
-     | `Ok nick ->
+     match%bind Monitor.try_with (fun () -> Reader.read_line r) with
+     | Ok `Eof | Error _ ->  close ()
+     | Ok (`Ok nick) ->
        match Hashtbl.find s.clients nick with
        | Some _ ->
          Writer.write_line w "Nick already taken. Sorry.";
@@ -89,7 +88,7 @@ let mud handlers =
          Hashtbl.set s.clients ~key:nick ~data:c;
          let (new_world, actions) = handlers.nick_added s.world nick in
          s.world <- new_world;
-         run_actions s handlers actions >>= fun () ->
+         let%bind () = run_actions s handlers actions in
          input_loop s handlers c
   )
 

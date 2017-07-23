@@ -15,7 +15,7 @@ type door =
   }
 
 type item =
-  {in_room : bool
+  { in_room : bool
   ; place : string
   ; description : string
   }
@@ -36,7 +36,6 @@ type world =
   ; rooms: room list
   ; items: item list
   }
-
 
   (*
    | ████████ ███████ ██   ██ ████████
@@ -108,7 +107,7 @@ There is a door to the south.
 let init =
   { people = []
   ; rooms = [ basic; welcome ]
-  ; items = [pebble]
+  ; items = [ pebble ] 
   }
 
 (*
@@ -254,5 +253,5 @@ let () =
     ; description
     ; handle_line
     ; nick_added
-    ; nick_removed
+    ; nick_removed 
     }
