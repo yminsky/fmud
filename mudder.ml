@@ -93,20 +93,25 @@ let mud handlers =
   )
 
 
-let start_mud h ~port =
+let start_mud h =
   Command.async'
     ~summary:"A mud!"
-    (Command.Param.return
-       (fun () ->
-          let handler = mud h in
-          printf "Starting accept loop.\n";
-          let%bind server = 
-            Tcp.Server.create
-              ~on_handler_error:(`Call (fun _addr exn ->
-                print_endline @@ Sexp.to_string_hum @@
-                [%message "Unexpected exception" ~_:(exn:Exn.t)]))
-              (Tcp.on_port port) 
-              (fun _addr -> handler)
-          in
-          Tcp.Server.close_finished server))
+    (let open Command.Let_syntax in
+     [%map_open
+       let port = flag "-port" (optional_with_default 12321 int)
+                    ~doc:"PORT the port to listen on" 
+       in
+       fun () ->
+         let open Deferred.Let_syntax in
+         let handler = mud h in
+         printf "Starting accept loop.\n";
+         let%bind server = 
+           Tcp.Server.create
+             ~on_handler_error:(`Call (fun _addr exn ->
+               print_endline @@ Sexp.to_string_hum @@
+               [%message "Unexpected exception" ~_:(exn:Exn.t)]))
+             (Tcp.on_port port) 
+             (fun _addr -> handler)
+         in
+         Tcp.Server.close_finished server])
   |> Command.run

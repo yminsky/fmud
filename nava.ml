@@ -271,7 +271,7 @@ let handle_line w nick line =
     (w,actions)
 
 let () =
-  start_mud ~port:12321
+  start_mud
     { init
     ; description
     ; handle_line

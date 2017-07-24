@@ -1,5 +1,4 @@
 open! Core
-open! Async
 
 type action =
   | Send_message of { nick: string; message: string }
@@ -15,4 +14,5 @@ type 'world handlers =
   }
 [@@deriving sexp]
 
-val start_mud : 'a handlers -> port:int -> unit
+(** Start the MUD server on the port in question. Never returns *)
+val start_mud : 'a handlers -> unit
