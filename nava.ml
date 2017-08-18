@@ -153,6 +153,13 @@ let drop_item name (items:item list) =
    | ██   ██  ██████    ██    ██  ██████  ██   ████ ███████
 *)
 
+let inventory w nick =
+  let things_i_have = List.filter w.items ~f:(fun i -> not (i.in_room) && (i.place = nick)) in
+  let thing_names =  List.map things_i_have ~f:(fun i-> i.description) in
+  let inv_string = String.concat ~sep:" \n " thing_names  in
+  "INVENTORY \n" ^ inv_string
+;;
+
 let looking w nick =
   let room = get_room w nick in
   let roomn = room.name in
@@ -193,6 +200,18 @@ let takeing w nick item_name =
     let nw = { w with items = new_items } in
     (nw, Send_message{nick; message = "Okay. You now have the " ^ item_name} :: [])
 ;;
+
+let drop w nick item_name =
+  let room = get_room w nick in
+  let items = List.map w.items ~f:(fun i ->
+    if i.name = item_name 
+    && not i.in_room
+    && i.place = nick
+    then { i with in_room = true; place = room.name }
+    else i)
+  in
+  { w with items }
+;;  
 
 let moving w nick direction =
   let me = List.find_exn w.people ~f:(fun p -> p.nick = nick) in
@@ -256,6 +275,10 @@ let handle_line w nick line =
   | "/look"  :: [] -> (w, [Send_message { nick; message = looking w nick }])
   | "/move"  :: dir :: [] -> moving w nick dir
   | "/take" :: name :: [] -> takeing w nick name
+  | "/drop" :: name :: [] -> 
+    (drop w nick name, [Send_message
+                          {nick; message = "Okay. You have dropped your " ^ name ^ "."}])
+  | "/inventory" :: [] -> (w, [Send_message {nick; message = inventory w nick}])
   | "/whisper" :: to_nick :: message ->
     (w, [Send_message { nick = to_nick  
                       ; message = nick ^ " whispered: " ^ String.concat ~sep:" " message }])
