@@ -98,11 +98,13 @@ let mud handlers =
          in
          if not right_password then (
            Writer.write_line w "Wrong password. Bye.";
+           let%bind () = Writer.flushed w in
            close r w
          ) else (
            match Hashtbl.find s.clients nick with
            | Some _ ->
              Writer.write_line w "Nick already taken. Sorry.";
+             let%bind () = Writer.flushed w in
              close r w
            | None ->
              let c = { nick; r; w } in
