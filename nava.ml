@@ -22,8 +22,9 @@ type item =
   }
 
 type person =
-  { nick: string
-  ; roomn: string
+  { nick : string
+  ; roomn : string
+  ; health : int
   }
 
 type room =
@@ -54,14 +55,19 @@ let description = {|
   |}
 
 let help = {|
-  Hey, it's a baby MUD!
-
   Not much here yet, but:
 
     Type /leave to exit the game
     Type /help for this message
     Type /whisper and who you are whispering to to send a
     message to that person
+    Type /look to see what is in the room
+    Type /move to leave the room
+    Type /take and the item you wish to take to collect it
+    Type /drop to drop a thing in your inventory to leave it 
+    a room
+    Type /hit to attack somebody
+    Type /inventory to see what things you have
     And anything else you type is sent to everyone else who
     is logged in.
 
@@ -121,14 +127,17 @@ let init =
 *)
 
 let get_person w nick =
-  List.find_exn w.people ~f:(fun p -> p.nick = nick)
+  List.find w.people ~f:(fun p -> p.nick = nick)
 
 let get_people_in_room w roomn =
   List.filter w.people ~f:(fun p -> p.roomn = roomn)
 
 let get_room w nick =
-  let roomn = (get_person w nick).roomn in
-  List.find_exn w.rooms ~f:(fun r -> r.name = roomn)
+  match get_person w nick with
+  | None -> None
+  | Some person ->
+    let roomn = person.roomn in
+    List.find w.rooms ~f:(fun r -> r.name = roomn)
 
 let drop_nick nick people =
   List.filter people ~f:(fun p -> not (p.nick = nick))
@@ -145,6 +154,9 @@ let items_in_room w roomn =
 let drop_item name (items:item list) =
   List.filter items ~f:(fun i -> not (i.name = name))
 
+let replace_person w person =
+  let people = List.map w.people ~f:(fun p -> (if p.nick = person.nick then person else p)) in
+  {w with people = people}
 (*
    |  █████   ██████ ████████ ██  ██████  ███    ██ ███████
    | ██   ██ ██         ██    ██ ██    ██ ████   ██ ██
@@ -161,56 +173,62 @@ let inventory w nick =
 ;;
 
 let looking w nick =
-  let room = get_room w nick in
-  let roomn = room.name in
-  let people_in_room = drop_nick nick (get_people_in_room w roomn) in
-  let people_description =
-    match people_in_room with
-    | [] -> [ "Nobody is in the room." ]
-    | _ ->
-      let names_in_room = List.map people_in_room ~f:(fun p -> p.nick) in
-      [ "You see"
-      ; String.concat ~sep:" and " names_in_room ^ "."
-      ]
-  in
-  let items_in_room = 
-    List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn) 
-  in
-  let item_description =
-    match items_in_room with
-    | [] -> []
-    | _ ->
-      let descriptions = List.map items_in_room ~f:(fun i -> i.description) in
-      [ "You see"
-      ; String.concat ~sep:" and " descriptions ^ "."
-      ]
-  in
-  room.description ^ String.concat ~sep:" " (people_description @ item_description)
+  match get_room w nick with
+  | None -> assert false
+  | Some room ->
+    let roomn =  room.name in
+    let people_in_room = drop_nick nick (get_people_in_room w roomn) in
+    let people_description =
+      match people_in_room with
+      | [] -> [ "Nobody is in the room." ]
+      | _ ->
+        let names_in_room = List.map people_in_room ~f:(fun p -> p.nick) in
+        [ "You see"
+        ; String.concat ~sep:" and " names_in_room ^ "."
+        ]
+    in
+    let items_in_room = 
+      List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn) 
+    in
+    let item_description =
+      match items_in_room with
+      | [] -> []
+      | _ ->
+        let descriptions = List.map items_in_room ~f:(fun i -> i.description) in
+        [ "You see"
+        ; String.concat ~sep:" and " descriptions ^ "."
+        ]
+    in
+    room.description ^ String.concat ~sep:" " (people_description @ item_description)
 
 let takeing w nick item_name =
-  let me = get_person w nick in
-  let items_in_room = 
-    items_in_room w me.roomn
-  in
-  let item = List.find items_in_room ~f:(fun i -> item_name = i.name) in
-  match item with
-  | None -> (w ,Send_message {nick; message = "Sorry " ^ nick ^ ". I don't see a " ^ item_name} :: [])
-  | Some item ->
-    let  new_items = {item with in_room = false; place = nick} :: drop_item item_name w.items in 
-    let nw = { w with items = new_items } in
-    (nw, Send_message{nick; message = "Okay. You now have the " ^ item_name} :: [])
+  match get_person w nick with
+  | None -> assert false
+  | Some me ->
+    let items_in_room = 
+      items_in_room w me.roomn
+    in
+    let item = List.find items_in_room ~f:(fun i -> item_name = i.name) in
+    match item with
+    | None -> (w ,Send_message {nick; message = "Sorry " ^ nick ^ ". I don't see a " ^ item_name} :: [])
+    | Some item ->
+      let  new_items = {item with in_room = false; place = nick} :: drop_item item_name w.items in 
+      let nw = { w with items = new_items } in
+      (nw, Send_message{nick; message = "Okay. You now have the " ^ item_name} :: [])
 ;;
 
 let drop w nick item_name =
-  let room = get_room w nick in
-  let items = List.map w.items ~f:(fun i ->
-    if i.name = item_name 
-    && not i.in_room
-    && i.place = nick
-    then { i with in_room = true; place = room.name }
-    else i)
-  in
-  { w with items }
+  match get_room w nick with
+  | None -> assert false
+  | Some room ->
+    let items = List.map w.items ~f:(fun i ->
+      if i.name = item_name 
+      && not i.in_room
+      && i.place = nick
+      then { i with in_room = true; place = room.name }
+      else i)
+    in
+    { w with items }
 ;;  
 
 let moving w nick direction =
@@ -246,8 +264,57 @@ let moving w nick direction =
     in
     (nw,actions)
 
+let check_health w nick =
+  match get_person w nick with
+  | None -> assert false
+  | Some me ->
+    (w, [Send_message {nick; message = Int.to_string me.health}])
+
+let hit w nick vic =
+  match (get_person w nick, get_person w vic) with
+  | None, _ -> assert false
+  | Some _, None -> (w, [Send_message {nick; message = "Ha! " ^ vic ^ " isn't a player!"}])
+  | Some attacker, Some attacked ->
+    if attacker.roomn = attacked.roomn
+    then  
+      let attacked = { attacked with health = attacked.health - 1 } in
+      if attacked.health = 0
+      then 
+        if  vic = nick
+        then 
+          (w, 
+           [Send_message {nick; message = "You kill yourself. You think 'Why the hell did I do that?'"}; 
+            Kill_client{nick}])
+        else 
+          (w,
+           [Send_message {nick = vic; message = nick ^ " killed you."};
+            Send_message {nick; message = "You killed " ^vic } ;
+            Kill_client {nick = vic} ] )
+      else  if vic = nick 
+      then       
+        (replace_person w attacked, 
+         [Send_message 
+            {nick; message = 
+                     "You sock yourself in the face.
+   You think 'That hurt. Why did I do that?'"}]) 
+      else 
+        (replace_person w attacked, 
+         [Send_message 
+            {nick = vic; message = 
+                           "You've been hit by " ^ nick ^ "!"}; 
+          Send_message
+            {nick; message = 
+                     "You hit " ^ vic ^ "."}
+         ]) 
+    else
+      (replace_person w attacked, 
+       [Send_message 
+          {nick; message = 
+                   "Sorry! " ^ vic ^ " isn't in this room!"}]) 
+;;
+
 let nick_added w nick =
-  let person = { nick; roomn = "Welcome" } in
+  let person = { nick; roomn = "Welcome" ; health = 20 } in
   let nw = { w with people = person :: w.people } in
   let welcome_message =
     Send_message { nick; message = String.concat ["Welcome to the MUD, "; nick; "!"] }
@@ -260,12 +327,27 @@ let nick_added w nick =
   (nw,actions)
 
 let nick_removed w nick =
-  let nw = { w with people = other_people w nick } in
-  let goodbye_message = nick ^ " has left the world." in
+  let me = Option.value_exn ( get_person w nick)  in
+  let new_me =  { me with roomn = "Welcome"} in
+  let items = List.map w.items ~f:(fun i -> 
+    if i.in_room = false && i.place = nick 
+    then {i with in_room = false; place = me.roomn}
+    else i )in
+  let newishw = replace_person w new_me in
+  let nw = {newishw with items=items} in
+  let goodbye_message = nick ^ " vanished in a puff of smoke." in
   let actions = List.map (other_people w nick) ~f:(fun p ->
     Send_message { nick = p.nick; message = goodbye_message })
   in
   (nw,actions)
+
+(*
+   type item =
+   { in_room : bool
+   ; place : string
+   ; description : string
+   ; name : string
+   }*)
 
 let handle_line w nick line =
   match String.split ~on:' ' line with
@@ -275,9 +357,16 @@ let handle_line w nick line =
   | "/look"  :: [] -> (w, [Send_message { nick; message = looking w nick }])
   | "/move"  :: dir :: [] -> moving w nick dir
   | "/take" :: name :: [] -> takeing w nick name
+  | "/hit" :: name :: [] -> hit w nick name
+  | "/health" ::[] -> check_health w nick
   | "/drop" :: name :: [] -> 
-    (drop w nick name, [Send_message
-                          {nick; message = "Okay. You have dropped your " ^ name ^ "."}])
+    let nw = drop w nick name in
+    let message = 
+      [ Send_message { nick; message = 
+                               if nw = w then "Sorry, you don't have one of those" 
+                               else "Okay, you have dropped your " ^ name ^ "."}]
+    in 
+    (nw,message)
   | "/inventory" :: [] -> (w, [Send_message {nick; message = inventory w nick}])
   | "/whisper" :: to_nick :: message ->
     (w, [Send_message { nick = to_nick  
@@ -285,7 +374,10 @@ let handle_line w nick line =
   | _ ->
     (* just show what was said to everyone in the same room *)
     let hearers =
-      drop_nick nick (get_people_in_room w (get_person w nick).roomn)
+      match get_person w nick with
+      | None -> assert false
+      | Some lalaland ->
+        drop_nick nick (get_people_in_room w lalaland .roomn)
     in
     let actions =
       let message = nick ^ ": " ^ line in
