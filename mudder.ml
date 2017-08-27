@@ -12,12 +12,16 @@ type client =
   ; w: Writer.t
   }
 
+type password = { nick: string; password: string }
+[@@deriving sexp]
+
 type 'world handlers =
   { init : 'world
   ; description : string
   ; handle_line : 'world -> string -> string -> 'world * action list
   ; nick_added : 'world -> string -> 'world * action list
   ; nick_removed : 'world -> string -> 'world * action list
+  ; passwords : password list
   }
 [@@deriving sexp]
 
@@ -64,6 +68,17 @@ let input_loop (s:_ state) (h:_ handlers) (c:client) =
   in
   loop ()
 
+let close r w =
+  let%bind () = Reader.close r in
+  Writer.close w
+
+let prompt r w prompt =
+  Writer.write w (prompt ^ ": ");
+  match%map Monitor.try_with (fun () -> Reader.read_line r) with
+  | Ok `Eof | Error _ -> None
+  | Ok (`Ok response) -> Some response
+;;
+
 let mud handlers =
   let s = { world = handlers.init
           ; clients = String.Table.create ()
@@ -71,27 +86,33 @@ let mud handlers =
   in
   (fun r w ->
      Writer.write_line w handlers.description;
-     Writer.write w "nick: ";
-     let close () =
-       let%bind () = Reader.close r in
-       Writer.close w
-     in
-     match%bind Monitor.try_with (fun () -> Reader.read_line r) with
-     | Ok `Eof | Error _ ->  close ()
-     | Ok (`Ok nick) ->
-       match Hashtbl.find s.clients nick with
-       | Some _ ->
-         Writer.write_line w "Nick already taken. Sorry.";
-         close ()
-       | None ->
-         let c = { nick; r; w } in
-         Hashtbl.set s.clients ~key:nick ~data:c;
-         let (new_world, actions) = handlers.nick_added s.world nick in
-         s.world <- new_world;
-         let%bind () = run_actions s handlers actions in
-         input_loop s handlers c
+     match%bind prompt r w "nick" with
+     | None -> close r w
+     | Some nick ->
+       match%bind prompt r w "pw" with
+       | None -> close r w
+       | Some password ->
+         let right_password = 
+           List.exists handlers.passwords ~f:(fun pw ->
+             pw.nick = nick && pw.password = password)
+         in
+         if not right_password then (
+           Writer.write_line w "Wrong password. Bye.";
+           close r w
+         ) else (
+           match Hashtbl.find s.clients nick with
+           | Some _ ->
+             Writer.write_line w "Nick already taken. Sorry.";
+             close r w
+           | None ->
+             let c = { nick; r; w } in
+             Hashtbl.set s.clients ~key:nick ~data:c;
+             let (new_world, actions) = handlers.nick_added s.world nick in
+             s.world <- new_world;
+             let%bind () = run_actions s handlers actions in
+             input_loop s handlers c
+         )
   )
-
 
 let start_mud h =
   Command.async'

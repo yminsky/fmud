@@ -16,12 +16,16 @@ type action =
   | Kill_client  of { nick: string }
 [@@deriving sexp]
 
+type password = { nick: string; password: string }
+[@@deriving sexp]
+
 type 'world handlers =
   { init         : 'world
   ; description  : string
   ; handle_line  : 'world -> string -> string -> 'world * action list
   ; nick_added   : 'world -> string -> 'world * action list
   ; nick_removed : 'world -> string -> 'world * action list
+  ; passwords    : password list
   }
 [@@deriving sexp]
 
