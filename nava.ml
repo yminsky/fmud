@@ -279,14 +279,20 @@ let hit w nick vic =
     then  
       let attacked = { attacked with health = attacked.health - 1 } in
       if attacked.health = 0
-      then 
+      then  
+        let items = List.map w.items ~f:(fun i -> 
+          if i.in_room = false && i.place = nick 
+          then {i with in_room = false; place = attacker.roomn}
+          else i )
+        in
+        let nw = {w with items} in
         if  vic = nick
         then 
-          (w, 
+          (nw, 
            [Send_message {nick; message = "You kill yourself. You think 'Why the hell did I do that?'"}; 
             Kill_client{nick}])
         else 
-          (w,
+          (nw,
            [Send_message {nick = vic; message = nick ^ " killed you."};
             Send_message {nick; message = "You killed " ^vic } ;
             Kill_client {nick = vic} ] )
@@ -314,27 +320,36 @@ let hit w nick vic =
 ;;
 
 let nick_added w nick =
-  let person = { nick; roomn = "Welcome" ; health = 20 } in
-  let nw = { w with people = person :: w.people } in
-  let welcome_message =
-    Send_message { nick; message = String.concat ["Welcome to the MUD, "; nick; "!"] }
-  in
-  let hello_messages =
-    List.map w.people ~f:(fun p ->
-      Send_message {nick = p.nick; message = nick ^ " has arrived!"})
-  in
-  let actions = welcome_message :: hello_messages in
-  (nw,actions)
+  match List.find w.people ~f:(fun p -> p.nick = nick) with
+  | None ->
+    let person = { nick; roomn = "Welcome" ; health = 20 } in
+    let nw = { w with people = person :: w.people } in
+    let welcome_message =
+      Send_message { nick; message = String.concat ["Welcome to the MUD, "; nick; "!"] }
+    in
+    let hello_messages =
+      List.map w.people ~f:(fun p ->
+        Send_message {nick = p.nick; message = nick ^ " has arrived!"})
+    in
+    let actions = welcome_message :: hello_messages in
+    (nw,actions)
+  | Some p ->   
+    let person = {p with health = 20 ; roomn = "Welcome"} in
+    let nw = { w with people = person :: w.people } in
+    let welcome_message =
+      Send_message { nick; message = String.concat ["Welcome to the MUD, "; nick; "!"] }
+    in
+    let hello_messages =
+      List.map w.people ~f:(fun p ->
+        Send_message {nick = p.nick; message = nick ^ " has arrived!"})
+    in
+    let actions = welcome_message :: hello_messages in
+    (nw,actions)
 
 let nick_removed w nick =
   let me = Option.value_exn ( get_person w nick)  in
   let new_me =  { me with roomn = "Welcome"} in
-  let items = List.map w.items ~f:(fun i -> 
-    if i.in_room = false && i.place = nick 
-    then {i with in_room = false; place = me.roomn}
-    else i )in
-  let newishw = replace_person w new_me in
-  let nw = {newishw with items=items} in
+  let nw = replace_person w new_me in
   let goodbye_message = nick ^ " vanished in a puff of smoke." in
   let actions = List.map (other_people w nick) ~f:(fun p ->
     Send_message { nick = p.nick; message = goodbye_message })
