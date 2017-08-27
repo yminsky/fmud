@@ -165,8 +165,10 @@ let replace_person w person =
    | ██   ██  ██████    ██    ██  ██████  ██   ████ ███████
 *)
 
+
 let inventory w nick =
-  let things_i_have = List.filter w.items ~f:(fun i -> not (i.in_room) && (i.place = nick)) in
+  let things_i_have = 
+    List.filter w.items ~f:(fun i -> not (i.in_room) && (i.place = nick)) in
   let thing_names =  List.map things_i_have ~f:(fun i-> i.description) in
   let inv_string = String.concat ~sep:" \n " thing_names  in
   "INVENTORY \n" ^ inv_string
@@ -201,7 +203,7 @@ let looking w nick =
     in
     room.description ^ String.concat ~sep:" " (people_description @ item_description)
 
-let takeing w nick item_name =
+let taking w nick item_name =
   match get_person w nick with
   | None -> assert false
   | Some me ->
@@ -210,9 +212,16 @@ let takeing w nick item_name =
     in
     let item = List.find items_in_room ~f:(fun i -> item_name = i.name) in
     match item with
-    | None -> (w ,Send_message {nick; message = "Sorry " ^ nick ^ ". I don't see a " ^ item_name} :: [])
+    | None -> 
+      let message = "Sorry " ^ nick ^ ". I don't see a " ^ item_name in
+      (w, Send_message {nick; message} :: [])
     | Some item ->
-      let  new_items = {item with in_room = false; place = nick} :: drop_item item_name w.items in 
+      let new_items = 
+        { item with 
+          in_room = false
+        ; place = nick 
+        } :: drop_item item_name w.items 
+      in 
       let nw = { w with items = new_items } in
       (nw, Send_message{nick; message = "Okay. You now have the " ^ item_name} :: [])
 ;;
@@ -282,9 +291,8 @@ let hit w nick vic =
       then 
         if  vic = nick
         then 
-          (w, 
-           [Send_message {nick; message = "You kill yourself. You think 'Why the hell did I do that?'"}; 
-            Kill_client{nick}])
+          let message = "You kill yourself. You think 'Why the hell did I do that?'" in
+          (w, [Send_message {nick; message }; Kill_client{nick}])
         else 
           (w,
            [Send_message {nick = vic; message = nick ^ " killed you."};
@@ -341,14 +349,6 @@ let nick_removed w nick =
   in
   (nw,actions)
 
-(*
-   type item =
-   { in_room : bool
-   ; place : string
-   ; description : string
-   ; name : string
-   }*)
-
 let handle_line w nick line =
   match String.split ~on:' ' line with
   | "" :: [] | [] -> (w,[])
@@ -356,17 +356,17 @@ let handle_line w nick line =
   | "/help"  :: [] -> (w, [Send_message { nick;message = help }])
   | "/look"  :: [] -> (w, [Send_message { nick; message = looking w nick }])
   | "/move"  :: dir :: [] -> moving w nick dir
-  | "/take" :: name :: [] -> takeing w nick name
+  | "/take" :: name :: [] -> taking w nick name
   | "/hit" :: name :: [] -> hit w nick name
   | "/health" ::[] -> check_health w nick
   | "/drop" :: name :: [] -> 
     let nw = drop w nick name in
     let message = 
-      [ Send_message { nick; message = 
-                               if nw = w then "Sorry, you don't have one of those" 
-                               else "Okay, you have dropped your " ^ name ^ "."}]
-    in 
-    (nw,message)
+      if nw = w then "Sorry, you don't have one of those" 
+      else "Okay, you have dropped your " ^ name ^ "."
+    in
+    let actions = [ Send_message { nick; message }] in
+    (nw,actions)
   | "/inventory" :: [] -> (w, [Send_message {nick; message = inventory w nick}])
   | "/whisper" :: to_nick :: message ->
     (w, [Send_message { nick = to_nick  
@@ -377,7 +377,7 @@ let handle_line w nick line =
       match get_person w nick with
       | None -> assert false
       | Some lalaland ->
-        drop_nick nick (get_people_in_room w lalaland .roomn)
+        drop_nick nick (get_people_in_room w lalaland.roomn)
     in
     let actions =
       let message = nick ^ ": " ^ line in

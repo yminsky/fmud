@@ -2,6 +2,6 @@
 
 (executables
  ((names (nava))
-  (libraries (core async))
+  (libraries (core async notty))
   (preprocess (pps (ppx_jane)))
   ))
