@@ -400,10 +400,6 @@ let handle_line w nick line =
     in
     (w,actions)
 
-let passwords =
-  [ { nick = "lalaland"; password = "yobaby" }
-  ]
-
 let () =
   start_mud
     { init
@@ -411,5 +407,4 @@ let () =
     ; handle_line
     ; nick_added
     ; nick_removed
-    ; passwords
     }

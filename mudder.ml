@@ -1,19 +1,19 @@
 open Core
 open Async
 
+module Nick : Identifiable = String
+module Password : Identifiable = String
+
 type action =
   | Send_message of { nick: string; message: string }
   | Kill_client  of { nick: string }
 [@@deriving sexp]
 
 type client =
-  { nick: string
+  { nick: Nick.t
   ; r: Reader.t
   ; w: Writer.t
   }
-
-type password = { nick: string; password: string }
-[@@deriving sexp]
 
 type 'world handlers =
   { init : 'world
@@ -21,20 +21,20 @@ type 'world handlers =
   ; handle_line : 'world -> string -> string -> 'world * action list
   ; nick_added : 'world -> string -> 'world * action list
   ; nick_removed : 'world -> string -> 'world * action list
-  ; passwords : password list
   }
 [@@deriving sexp]
 
 type 'world state =
-  { mutable world: 'world
-  ; clients: client String.Table.t
+  { mutable world : 'world
+  ; clients       : client Nick.Table.t
+  ; passwords     : Password.t Nick.Table.t
   }
 
 let rec remove_client (s:_ state) (h:_ handlers) (c:client) =
   let%bind () = Writer.close c.w in
   let%bind () = Reader.close c.r in
   Hashtbl.remove s.clients c.nick;
-  let (new_world,actions) = h.nick_removed s.world c.nick in
+  let (new_world,actions) = h.nick_removed s.world (Nick.to_string c.nick) in
   s.world <- new_world;
   run_actions s h actions
 
@@ -44,12 +44,14 @@ and run_actions (s:_ state) (h:_ handlers) actions : unit Deferred.t =
     print_endline (Sexp.to_string_hum (sexp_of_action action));
     begin match action with
     | Send_message { nick; message } ->
+      let nick = Nick.of_string nick in
       begin match Hashtbl.find s.clients nick with
       | None -> ()
       | Some c -> Writer.write_line c.w (String.strip message)
       end;
       Deferred.unit
     | Kill_client { nick } ->
+      let nick = Nick.of_string nick in
       begin match Hashtbl.find s.clients nick with
       | None -> Deferred.unit
       | Some c -> remove_client s h c
@@ -61,7 +63,7 @@ let input_loop (s:_ state) (h:_ handlers) (c:client) =
     match%bind Monitor.try_with (fun () -> Reader.read_line c.r) with
     | Ok `Eof | Error _ -> remove_client s h c
     | Ok (`Ok line) ->
-      let (new_world,actions) = h.handle_line s.world c.nick line in
+      let (new_world,actions) = h.handle_line s.world (Nick.to_string c.nick) line in
       s.world <- new_world;
       let%bind () = run_actions s h actions in
       loop ()
@@ -81,7 +83,8 @@ let prompt r w prompt =
 
 let mud handlers =
   let s = { world = handlers.init
-          ; clients = String.Table.create ()
+          ; clients = Nick.Table.create ()
+          ; passwords = Nick.Table.create ()
           }
   in
   (fun r w ->
@@ -89,31 +92,45 @@ let mud handlers =
      match%bind prompt r w "nick" with
      | None -> close r w
      | Some nick ->
-       match%bind prompt r w "pw" with
-       | None -> close r w
-       | Some password ->
-         let right_password = 
-           List.exists handlers.passwords ~f:(fun pw ->
-             pw.nick = nick && pw.password = password)
+       let nick = Nick.of_string nick in
+       match Hashtbl.find s.clients nick with
+       | Some _ ->
+         Writer.write_line w "Someone is already logged in with that nick.";
+         let%bind () = Writer.flushed w in
+         close r w
+       | None ->
+         let start_client () =
+           let c = { nick; r; w } in
+           Hashtbl.set s.clients ~key:nick ~data:c;
+           let (new_world, actions) = handlers.nick_added s.world (Nick.to_string nick) in
+           s.world <- new_world;
+           let%bind () = run_actions s handlers actions in
+           input_loop s handlers c
          in
-         if not right_password then (
-           Writer.write_line w "Wrong password. Bye.";
+         match Hashtbl.find s.passwords nick with
+         | None ->
+           Writer.write_line w "Hey, you're new here! Please pick a password.";
            let%bind () = Writer.flushed w in
-           close r w
-         ) else (
-           match Hashtbl.find s.clients nick with
-           | Some _ ->
-             Writer.write_line w "Nick already taken. Sorry.";
-             let%bind () = Writer.flushed w in
-             close r w
-           | None ->
-             let c = { nick; r; w } in
-             Hashtbl.set s.clients ~key:nick ~data:c;
-             let (new_world, actions) = handlers.nick_added s.world nick in
-             s.world <- new_world;
-             let%bind () = run_actions s handlers actions in
-             input_loop s handlers c
-         )
+           begin match%bind prompt r w "new password" with
+           | None -> close r w
+           | Some password ->
+             let password = Password.of_string password in
+             Hashtbl.set s.passwords ~key:nick ~data:password;
+             start_client ()
+           end
+         | Some expected_password ->
+           begin match%bind prompt r w "pw" with
+           | None -> close r w
+           | Some password ->
+             let password = Password.of_string password in
+             if not (Password.equal expected_password password) then (
+               Writer.write_line w "Wrong password. Bye.";
+               let%bind () = Writer.flushed w in
+               close r w
+             ) else (
+               start_client ()
+             )
+           end
   )
 
 let start_mud h =
