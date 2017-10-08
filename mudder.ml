@@ -81,56 +81,60 @@ let prompt r w prompt =
   | Ok (`Ok response) -> Some response
 ;;
 
-let mud handlers =
+
+let start_client s handlers r w nick =
+  let c = { nick; r; w } in
+  Hashtbl.set s.clients ~key:nick ~data:c;
+  let (new_world, actions) = 
+    handlers.nick_added s.world (Nick.to_string nick) 
+  in
+  s.world <- new_world;
+  let%bind () = run_actions s handlers actions in
+  input_loop s handlers c
+;;
+
+let build_connection_handler handlers =
   let s = { world = handlers.init
           ; clients = Nick.Table.create ()
           ; passwords = Nick.Table.create ()
           }
   in
-  (fun r w ->
-     Writer.write_line w handlers.description;
-     match%bind prompt r w "nick" with
-     | None -> close r w
-     | Some nick ->
-       let nick = Nick.of_string nick in
-       match Hashtbl.find s.clients nick with
-       | Some _ ->
-         Writer.write_line w "Someone is already logged in with that nick.";
-         let%bind () = Writer.flushed w in
-         close r w
-       | None ->
-         let start_client () =
-           let c = { nick; r; w } in
-           Hashtbl.set s.clients ~key:nick ~data:c;
-           let (new_world, actions) = handlers.nick_added s.world (Nick.to_string nick) in
-           s.world <- new_world;
-           let%bind () = run_actions s handlers actions in
-           input_loop s handlers c
-         in
-         match Hashtbl.find s.passwords nick with
-         | None ->
-           Writer.write_line w "Hey, you're new here! Please pick a password.";
-           let%bind () = Writer.flushed w in
-           begin match%bind prompt r w "new password" with
-           | None -> close r w
-           | Some password ->
-             let password = Password.of_string password in
-             Hashtbl.set s.passwords ~key:nick ~data:password;
-             start_client ()
-           end
-         | Some expected_password ->
-           begin match%bind prompt r w "pw" with
-           | None -> close r w
-           | Some password ->
-             let password = Password.of_string password in
-             if not (Password.equal expected_password password) then (
-               Writer.write_line w "Wrong password. Bye.";
-               let%bind () = Writer.flushed w in
-               close r w
-             ) else (
-               start_client ()
-             )
-           end
+  stage (fun r w ->
+    Writer.write_line w handlers.description;
+    match%bind prompt r w "nick" with
+    | None -> close r w
+    | Some nick ->
+      let nick = Nick.of_string nick in
+      match Hashtbl.find s.clients nick with
+      | Some _ ->
+        Writer.write_line w "Someone is already logged in with that nick.";
+        let%bind () = Writer.flushed w in
+        close r w
+      | None ->
+        match Hashtbl.find s.passwords nick with
+        | None ->
+          Writer.write_line w "Hey, you're new here! Please pick a password.";
+          let%bind () = Writer.flushed w in
+          begin match%bind prompt r w "new password" with
+          | None -> close r w
+          | Some password ->
+            let password = Password.of_string password in
+            Hashtbl.set s.passwords ~key:nick ~data:password;
+            start_client s handlers r w nick
+          end
+        | Some expected_password ->
+          begin match%bind prompt r w "pw" with
+          | None -> close r w
+          | Some password ->
+            let password = Password.of_string password in
+            if not (Password.equal expected_password password) then (
+              Writer.write_line w "Wrong password. Bye.";
+              let%bind () = Writer.flushed w in
+              close r w
+            ) else (
+              start_client s handlers r w nick
+            )
+          end
   )
 
 let start_mud h =
@@ -143,7 +147,7 @@ let start_mud h =
        in
        fun () ->
          let open Deferred.Let_syntax in
-         let handler = mud h in
+         let handle_connection = unstage (build_connection_handler h) in
          printf "Starting accept loop.\n";
          let%bind server = 
            Tcp.Server.create
@@ -151,7 +155,7 @@ let start_mud h =
                print_endline @@ Sexp.to_string_hum @@
                [%message "Unexpected exception" ~_:(exn:Exn.t)]))
              (Tcp.on_port port) 
-             (fun _addr -> handler)
+             (fun _addr -> handle_connection)
          in
          Tcp.Server.close_finished server])
   |> Command.run
