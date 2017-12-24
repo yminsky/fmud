@@ -81,7 +81,7 @@ let prompt r w prompt =
   | Ok (`Ok response) -> Some response
 ;;
 
-
+(** To be called after a password has been verified. *)
 let start_client s handlers r w nick =
   let c = { nick; r; w } in
   Hashtbl.set s.clients ~key:nick ~data:c;

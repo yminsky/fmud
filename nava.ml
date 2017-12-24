@@ -92,14 +92,16 @@ let pebble = { in_room = true;
 
 let n_welcome = { direction = "north"; destination = "Basic" }
 let s_basic   = { direction = "south"; destination = "Welcome" }
+let e_welcome 
 
 (* Rooms *)
 
 let welcome =
   { name = "Welcome"
-  ; doors = [ n_welcome ]
+  ; doors = [ n_welcome; e_welcome]
   ; description = {|
-Welcome to the room! There is a door to the north.
+You are in a room with cobblestone walls.
+There is a door to the north and the east.
 |}
   }
 
@@ -107,7 +109,7 @@ let basic =
   { name = "Basic"
   ; doors = [ s_basic ]
   ; description = {|
-This is like, the most boring room ever.
+This is the most boring room ever.
 There is a door to the south.
 |}
   }
@@ -345,11 +347,11 @@ let nick_added w nick =
     let person = {p with health = 20 ; roomn = "Welcome"} in
     let nw = { w with people = person :: w.people } in
     let welcome_message =
-      Send_message { nick; message = String.concat ["Welcome to the MUD, "; nick; "!"] }
+      Send_message { nick; message = String.concat ["Welcome back to the MUD, "; nick; "!"] }
     in
     let hello_messages =
-      List.map w.people ~f:(fun p ->
-        Send_message {nick = p.nick; message = nick ^ " has arrived!"})
+      List.map (other_people w nick) ~f:(fun p ->
+        Send_message {nick = p.nick; message = nick ^ " has returned!"})
     in
     let actions = welcome_message :: hello_messages in
     (nw,actions)
