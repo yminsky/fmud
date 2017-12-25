@@ -85,14 +85,39 @@ let help = {|
 (* Items *)
 
 let pebble = { in_room = true;
-               place = "Welcome";
+               place = "Basic";
                description = "a normal gray pebble";
                name = "pebble"}
+let lantern = { in_room = true;
+                place = "Welcome";
+                description = "an obsidian lantern with a small handel. 
+                The flame is lit.";
+                name = "obsidian lantern"}
+let red_book = {in_room = true;
+                place = "Library";
+                description = "a red book with a lether cover. 
+                The name is Monsters Through the Ages";
+                name = "monsters through the ages"}
+let green_book = {in_room = true;
+                  place = "Library";
+                  description = "a green, well worn book.
+                   The name is Runes for Dummies. 
+                   There is a lock on the cover.";
+                  name = "runes for dummies"}
+let blue_book = {in_room = true;
+                 place = "Library";
+                 description = "a blue flower on the cover.
+                  It looks good as new. 
+                  The name is blurred but you can make out the title 
+                  Flowers of the World";
+                 name = "flowers of the world"}        
+
 (* Doors *)
 
 let n_welcome = { direction = "north"; destination = "Basic" }
 let s_basic   = { direction = "south"; destination = "Welcome" }
-let e_welcome 
+let e_welcome = { direction = "east"; destination = "Library" }
+let w_library = { direction = "west"; destination = "Welcome"}
 
 (* Rooms *)
 
@@ -100,8 +125,20 @@ let welcome =
   { name = "Welcome"
   ; doors = [ n_welcome; e_welcome]
   ; description = {|
-You are in a room with cobblestone walls.
+You are in a room with cobblestone walls
+A small obsidian lantern sits in the middle of the floor.
 There is a door to the north and the east.
+|}
+  }
+let library =
+  { name = "Library"
+  ; doors = [ w_library]
+  ; description = {|
+You enter a room with wooden bookshelfs around the room.
+Books fill every shelf.
+A small chair is stationed in the middle of the room. 
+It's legs are nailed down. Three books are in the middle of the room. 
+There is a door to the west.
 |}
   }
 
@@ -116,8 +153,8 @@ There is a door to the south.
 
 let init =
   { people = []
-  ; rooms = [ basic; welcome ]
-  ; items = [ pebble ] 
+  ; rooms = [ basic; welcome;library ]
+  ; items = [ pebble;lantern; red_book; blue_book; green_book ] 
   }
 
 (*
@@ -373,7 +410,7 @@ let handle_line w nick line =
   | "/help"  :: [] -> (w, [Send_message { nick;message = help }])
   | "/look"  :: [] -> (w, [Send_message { nick; message = looking w nick }])
   | "/move"  :: dir :: [] -> moving w nick dir
-  | "/take" :: name :: [] -> taking w nick name
+  | "/take" :: name -> taking w nick (String.concat ~sep:" " name) 
   | "/hit" :: name :: [] -> hit w nick name
   | "/health" ::[] -> check_health w nick
   | "/drop" :: name :: [] -> 
