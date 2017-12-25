@@ -86,31 +86,42 @@ let help = {|
 
 let pebble = { in_room = true;
                place = "Basic";
-               description = "a normal gray pebble";
+               description = "
+a normal gray pebble";
                name = "pebble"}
 let lantern = { in_room = true;
                 place = "Welcome";
-                description = "an obsidian lantern with a small handel. 
-                The flame is lit.";
+                description = "
+an obsidian lantern with a small handel. 
+The flame is lit.";
                 name = "obsidian lantern"}
 let red_book = {in_room = true;
                 place = "Library";
-                description = "a red book with a lether cover. 
-                The name is Monsters Through the Ages";
+                description = "
+a red book with a lether cover. 
+The name is Monsters Through the Ages";
                 name = "monsters through the ages"}
 let green_book = {in_room = true;
                   place = "Library";
-                  description = "a green, well worn book.
-                   The name is Runes for Dummies. 
-                   There is a lock on the cover.";
+                  description = "
+a green, well worn book.
+The name is Runes for Dummies.
+There is a lock on the cover.";
                   name = "runes for dummies"}
 let blue_book = {in_room = true;
                  place = "Library";
-                 description = "a blue flower on the cover.
-                  It looks good as new. 
-                  The name is blurred but you can make out the title 
-                  Flowers of the World";
-                 name = "flowers of the world"}        
+                 description = "
+a blue flower on the cover.
+It looks good as new. 
+The name is blurred but you can make out the title 
+Flowers of the World";
+                 name = "flowers of the world"}  
+let hunting_knife = {in_room = true;
+                     place = "Prisons";
+                     description = "
+a small curved hunting knife.
+It has a lether handle and a carving of a flower on the blade.";
+                     name = "hunting knife"}        
 
 (* Doors *)
 
@@ -118,28 +129,42 @@ let n_welcome = { direction = "north"; destination = "Basic" }
 let s_basic   = { direction = "south"; destination = "Welcome" }
 let e_welcome = { direction = "east"; destination = "Library" }
 let w_library = { direction = "west"; destination = "Welcome"}
+let w_welcome = { direction = "west"; destination = "Prisons"}
+let e_prisons = { direction = "east"; destination = "Welcome"}
 
 (* Rooms *)
 
 let welcome =
   { name = "Welcome"
-  ; doors = [ n_welcome; e_welcome]
-  ; description = {|
+  ; doors = [ n_welcome; e_welcome; w_welcome]
+  ; description = "
 You are in a room with cobblestone walls
 A small obsidian lantern sits in the middle of the floor.
-There is a door to the north and the east.
-|}
+There is a door to the north, the east and the west.
+"
   }
+
+let prisons =
+  { name = "Prisons";
+    doors = [e_prisons];
+    description = "
+You enter a cold dark room. 
+As you walk in torches along the walls light up.
+You see four cells in the room, one in each corner.
+Withen every cell there is a sleeping prisoner.
+There is a table in the middle of the room with a small hunting knife.
+"}
+
 let library =
   { name = "Library"
   ; doors = [ w_library]
-  ; description = {|
+  ; description = "
 You enter a room with wooden bookshelfs around the room.
 Books fill every shelf.
 A small chair is stationed in the middle of the room. 
 It's legs are nailed down. Three books are in the middle of the room. 
 There is a door to the west.
-|}
+"
   }
 
 let basic =
@@ -153,8 +178,8 @@ There is a door to the south.
 
 let init =
   { people = []
-  ; rooms = [ basic; welcome;library ]
-  ; items = [ pebble;lantern; red_book; blue_book; green_book ] 
+  ; rooms = [ basic; welcome;library; prisons ]
+  ; items = [ pebble;lantern; red_book; blue_book; green_book; hunting_knife] 
   }
 
 (*
@@ -208,7 +233,7 @@ let replace_person w person =
 let inventory w nick =
   let things_i_have = 
     List.filter w.items ~f:(fun i -> not (i.in_room) && (i.place = nick)) in
-  let thing_names =  List.map things_i_have ~f:(fun i-> i.description) in
+  let thing_names =  List.map things_i_have ~f:(fun i-> i.name) in
   let inv_string = String.concat ~sep:" \n " thing_names  in
   "INVENTORY \n" ^ inv_string
 ;;
@@ -270,11 +295,11 @@ let drop w nick item_name =
   | None -> assert false
   | Some room ->
     let items = List.map w.items ~f:(fun i ->
-      if i.name = item_name 
-      && not i.in_room
-      && i.place = nick
-      then { i with in_room = true; place = room.name }
-      else i)
+        if i.name = item_name 
+        && not i.in_room
+        && i.place = nick
+        then { i with in_room = true; place = room.name }
+        else i)
     in
     { w with items }
 ;;  
@@ -329,9 +354,9 @@ let hit w nick vic =
       if attacked.health = 0
       then  
         let items = List.map w.items ~f:(fun i -> 
-          if i.in_room = false && i.place = nick 
-          then {i with in_room = false; place = attacker.roomn}
-          else i )
+            if i.in_room = false && i.place = nick 
+            then {i with in_room = false; place = attacker.roomn}
+            else i )
         in
         let nw = {w with items} in
         if  vic = nick
@@ -376,7 +401,7 @@ let nick_added w nick =
     in
     let hello_messages =
       List.map w.people ~f:(fun p ->
-        Send_message {nick = p.nick; message = nick ^ " has arrived!"})
+          Send_message {nick = p.nick; message = nick ^ " has arrived!"})
     in
     let actions = welcome_message :: hello_messages in
     (nw,actions)
@@ -388,7 +413,7 @@ let nick_added w nick =
     in
     let hello_messages =
       List.map (other_people w nick) ~f:(fun p ->
-        Send_message {nick = p.nick; message = nick ^ " has returned!"})
+          Send_message {nick = p.nick; message = nick ^ " has returned!"})
     in
     let actions = welcome_message :: hello_messages in
     (nw,actions)
@@ -399,7 +424,7 @@ let nick_removed w nick =
   let nw = replace_person w new_me in
   let goodbye_message = nick ^ " vanished in a puff of smoke." in
   let actions = List.map (other_people w nick) ~f:(fun p ->
-    Send_message { nick = p.nick; message = goodbye_message })
+      Send_message { nick = p.nick; message = goodbye_message })
   in
   (nw,actions)
 
