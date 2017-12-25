@@ -125,28 +125,42 @@ It has a lether handle and a carving of a flower on the blade.";
 
 (* Doors *)
 
-let n_welcome = { direction = "north"; destination = "Basic" }
-let s_basic   = { direction = "south"; destination = "Welcome" }
-let e_welcome = { direction = "east"; destination = "Library" }
-let w_library = { direction = "west"; destination = "Welcome"}
-let w_welcome = { direction = "west"; destination = "Prisons"}
-let e_prisons = { direction = "east"; destination = "Welcome"}
+
 
 (* Rooms *)
 
 let welcome =
   { name = "Welcome"
-  ; doors = [ n_welcome; e_welcome; w_welcome]
+  ; doors = [ 
+      { direction = "north"; destination = "Basic" };
+      { direction = "west"; destination = "Prisons"};
+      { direction = "east"; destination = "Library" };
+    ]
   ; description = "
 You are in a room with cobblestone walls
 A small obsidian lantern sits in the middle of the floor.
 There is a door to the north, the east and the west.
 "
   }
+let statue_garden =
+  { name = "Statue_garden";
+    doors = [
+      { direction = "north"; destination = "prisons"};
+    ];
+    description = {|
+words
+    |}
+
+
+  }
+
 
 let prisons =
   { name = "Prisons";
-    doors = [e_prisons];
+    doors = [
+      { direction = "east"; destination = "Welcome"};
+      { direction = "south"; destination = "Statue Garden"};
+    ];
     description = "
 You enter a cold dark room. 
 As you walk in torches along the walls light up.
@@ -157,7 +171,9 @@ There is a table in the middle of the room with a small hunting knife.
 
 let library =
   { name = "Library"
-  ; doors = [ w_library]
+  ; doors = [
+      { direction = "west"; destination = "Welcome"};
+    ]
   ; description = "
 You enter a room with wooden bookshelfs around the room.
 Books fill every shelf.
@@ -169,7 +185,7 @@ There is a door to the west.
 
 let basic =
   { name = "Basic"
-  ; doors = [ s_basic ]
+  ; doors = [ { direction = "south"; destination = "Welcome" };]
   ; description = {|
 This is the most boring room ever.
 There is a door to the south.
