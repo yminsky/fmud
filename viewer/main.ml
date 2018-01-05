@@ -4,5 +4,5 @@ open! Js_of_ocaml
 
 let () =
   Start_app.simple
-    (module Counters)
-    ~initial_model:(Counters.Model.Fields.create ~counters:(Int.Map.singleton 0 11))
+    (module App)
+    ~initial_model:App.Model.empty
