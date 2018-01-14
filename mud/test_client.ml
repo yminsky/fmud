@@ -39,7 +39,7 @@ let main ~host ~port =
 let () =
   let open Command.Let_syntax in
   Command.async
-    ~summary:"Start a hello world Async server"
+    ~summary:"connect to an http server"
     [%map_open
       let port = 
         flag "-p" (optional_with_default 8080 int)
