@@ -1,0 +1,8 @@
+(jbuild_version 1)
+
+(library
+ ((name mudder)
+  (flags (:standard -safe-string -short-paths))
+  (libraries (core async httpaf-async))
+  (preprocess (pps (ppx_jane)))
+  ))

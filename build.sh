@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 jbuilder build \
-    mud/nava.bc \
+    nava/main.bc \
     viewer/main.bc.js \
-    mud/server.bc \
-     mud/test_client.bc \
-     --dev
+    test/server.bc \
+    test/client.bc \
+    --dev
