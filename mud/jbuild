@@ -1,8 +1,8 @@
 (jbuild_version 1)
 
-(executable
- ((name nava)
+(executables
+ ((names (nava server))
   (flags (:standard -safe-string -short-paths))
-  (libraries (core async))
+  (libraries (core async httpaf-async))
   (preprocess (pps (ppx_jane)))
   ))
