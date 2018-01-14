@@ -1,6 +1,13 @@
 open Core
 open Async
-open Httpaf
+include struct
+  module Body = Httpaf.Body
+  module Response = Httpaf.Response
+  module Reqd = Httpaf.Reqd
+  module Request = Httpaf.Request
+  module Headers = Httpaf.Headers
+  module Status = Httpaf.Status
+end
 
 let error_handler _ ?request:_ error start_response =
   let response_body = start_response Headers.empty in
@@ -16,7 +23,7 @@ let error_handler _ ?request:_ error start_response =
 
 let request_handler _ reqd =
   match Reqd.request reqd  with
-  | { Request.meth = `GET; headers; _ } ->
+  | { meth = `POST; headers; _ } ->
     let response =
       let content_type =
         match Headers.get headers "content-type" with
@@ -36,6 +43,12 @@ let request_handler _ reqd =
       Body.close response_body
     in
     Body.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read    
+  | { meth = `GET; _} ->
+    let response = 
+      Response.create `OK
+        ~headers:(Headers.of_list ["content-type","application/octet-stream"]) 
+    in
+    Reqd.respond_with_string reqd response "Egad, a message!"
   | _ -> Reqd.respond_with_string reqd (Response.create `Method_not_allowed) ""
 ;;
 
