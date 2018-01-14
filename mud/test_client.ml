@@ -2,7 +2,6 @@ open Core
 open Async
 
 open Httpaf
-open Httpaf_async
 
 let response_handler finished response response_body =
   match response with
@@ -22,10 +21,9 @@ let main host port =
     Tcp.Where_to_connect.of_host_and_port (Host_and_port.create ~host ~port)
   in
   let finished = Ivar.create () in
-  Tcp.connect_sock where_to_connect
-  >>= fun socket ->
+  let%bind socket = Tcp.connect_sock where_to_connect in
   let request_body =
-    Client.request
+    Httpaf_async.Client.request
       ~error_handler
       ~response_handler:(response_handler finished)
       socket
