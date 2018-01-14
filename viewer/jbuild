@@ -3,7 +3,7 @@
 (executable
  ((name main)
   (flags (:standard -safe-string -short-paths))
-  (libraries (incr_dom))
+  (libraries (incr_dom mud_protocol))
   (preprocess (pps (js_of_ocaml-ppx ppx_jane ppx_driver.runner)))
   (js_of_ocaml ((flags (+weak.js))))
   ))
