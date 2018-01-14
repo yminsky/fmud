@@ -1,3 +1,8 @@
 #!/usr/bin/env bash
 
-dune_watch -- mud/nava.bc viewer/main.bc.js mud/server.bc --dev
+jbuilder build \
+    mud/nava.bc \
+    viewer/main.bc.js \
+    mud/server.bc \
+     mud/test_client.bc \
+     --dev
