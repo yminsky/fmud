@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-jbuilder build nava.bc --dev
+dune_watch -- mud/nava.bc viewer/main.bc.js mud/server.bc --dev

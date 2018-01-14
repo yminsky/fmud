@@ -47,14 +47,14 @@ type world =
    |    ██    ███████ ██   ██    ██
 *)
 
-let description = {|
+let description = "
   Hey! This is a MUD! Enjoy.
 
   Look around, and see what you can find. We don't
   have many features yet, but we'll have more soon!
-  |}
+"
 
-let help = {|
+let help = "
   Not much here yet, but:
 
     Type /leave to exit the game
@@ -72,7 +72,7 @@ let help = {|
     is logged in.
 
   Have fun!
-  |}
+"
 
   (*
    |  ██████   █████  ███    ███ ███████
@@ -101,6 +101,7 @@ let red_book = {in_room = true;
 a red book with a lether cover. 
 The name is Monsters Through the Ages";
                 name = "monsters through the ages"}
+
 let green_book = {in_room = true;
                   place = "Library";
                   description = "
@@ -310,11 +311,11 @@ let drop w nick item_name =
   | None -> assert false
   | Some room ->
     let items = List.map w.items ~f:(fun i ->
-        if i.name = item_name 
-        && not i.in_room
-        && i.place = nick
-        then { i with in_room = true; place = room.name }
-        else i)
+      if i.name = item_name 
+      && not i.in_room
+      && i.place = nick
+      then { i with in_room = true; place = room.name }
+      else i)
     in
     { w with items }
 ;;  
@@ -389,9 +390,9 @@ let hit w nick vic =
       if attacked.health = 0
       then  
         let items = List.map w.items ~f:(fun i -> 
-            if i.in_room = false && i.place = nick 
-            then {i with in_room = false; place = attacker.roomn}
-            else i )
+          if i.in_room = false && i.place = nick 
+          then {i with in_room = false; place = attacker.roomn}
+          else i )
         in
         let nw = {w with items} in
         if  vic = nick
@@ -436,7 +437,7 @@ let nick_added w nick =
     in
     let hello_messages =
       List.map w.people ~f:(fun p ->
-          Send_message {nick = p.nick; message = nick ^ " has arrived!"})
+        Send_message {nick = p.nick; message = nick ^ " has arrived!"})
     in
     let actions = welcome_message :: hello_messages in
     (nw,actions)
@@ -448,7 +449,7 @@ let nick_added w nick =
     in
     let hello_messages =
       List.map (other_people w nick) ~f:(fun p ->
-          Send_message {nick = p.nick; message = nick ^ " has returned!"})
+        Send_message {nick = p.nick; message = nick ^ " has returned!"})
     in
     let actions = welcome_message :: hello_messages in
     (nw,actions)
@@ -459,7 +460,7 @@ let nick_removed w nick =
   let nw = replace_person w new_me in
   let goodbye_message = nick ^ " vanished in a puff of smoke." in
   let actions = List.map (other_people w nick) ~f:(fun p ->
-      Send_message { nick = p.nick; message = goodbye_message })
+    Send_message { nick = p.nick; message = goodbye_message })
   in
   (nw,actions)
 
