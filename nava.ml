@@ -123,10 +123,6 @@ a small curved hunting knife.
 It has a lether handle and a carving of a flower on the blade.";
                      name = "hunting knife"}        
 
-(* Doors *)
-
-
-
 (* Rooms *)
 
 let welcome =
@@ -143,15 +139,18 @@ There is a door to the north, the east and the west.
 "
   }
 let statue_garden =
-  { name = "Statue_garden";
+  { name = "Statue Garden";
     doors = [
       { direction = "north"; destination = "prisons"};
     ];
-    description = {|
-words
-    |}
-
-
+    description = "
+You enter a very well lit room. 
+Stone walkways partition off the room into four parts. 
+In one part, there are five stone greek statues.
+Another section has bronze statues.
+The third has wooden abstract structures.
+The final section has ceramic structures.
+"
   }
 
 
@@ -194,7 +193,7 @@ There is a door to the south.
 
 let init =
   { people = []
-  ; rooms = [ basic; welcome;library; prisons ]
+  ; rooms = [ basic; welcome;library; prisons;statue_garden ]
   ; items = [ pebble;lantern; red_book; blue_book; green_book; hunting_knife] 
   }
 
@@ -359,6 +358,26 @@ let check_health w nick =
   | Some me ->
     (w, [Send_message {nick; message = Int.to_string me.health}])
 
+let action w nick name =
+  match get_room w nick with
+  | None -> assert false
+  | Some room ->
+    match name with
+    | "sing" ->
+      if room.name = "Prisons" then
+        let actions = [Send_message {nick; message = "
+The prisoners look up as you sing, and you experience a brief
+moment of solidarity."}]
+        in
+        (w,actions)
+      else
+        let actions = [Send_message {nick; message = "You sing a lovely song, but no one notices."}] in
+        (w,actions)
+    | _ ->
+      let actions = [ Send_message {nick; message = "I don't know how to "^name}] in
+      (w,actions)
+;;
+
 let hit w nick vic =
   match (get_person w nick, get_person w vic) with
   | None, _ -> assert false
@@ -454,6 +473,7 @@ let handle_line w nick line =
   | "/take" :: name -> taking w nick (String.concat ~sep:" " name) 
   | "/hit" :: name :: [] -> hit w nick name
   | "/health" ::[] -> check_health w nick
+  | "/action" :: name -> action w nick (String.concat ~sep:" " name) 
   | "/drop" :: name :: [] -> 
     let nw = drop w nick name in
     let message = 
