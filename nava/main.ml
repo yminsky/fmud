@@ -64,7 +64,7 @@ let help = "
     Type /look to see what is in the room
     Type /move to leave the room
     Type /take and the item you wish to take to collect it
-    Type /drop to drop a thing in your inventory to leave it 
+    Type /drop to drop a thing in your inventory to leave it
     a room
     Type /hit to attack somebody
     Type /inventory to see what things you have
@@ -92,13 +92,13 @@ a normal gray pebble";
 let lantern = { in_room = true;
                 place = "Welcome";
                 description = "
-an obsidian lantern with a small handel. 
+an obsidian lantern with a small handel.
 The flame is lit.";
                 name = "obsidian lantern"}
 let red_book = {in_room = true;
                 place = "Library";
                 description = "
-a red book with a lether cover. 
+a red book with a lether cover.
 The name is Monsters Through the Ages";
                 name = "monsters through the ages"}
 
@@ -113,22 +113,22 @@ let blue_book = {in_room = true;
                  place = "Library";
                  description = "
 a blue flower on the cover.
-It looks good as new. 
-The name is blurred but you can make out the title 
+It looks good as new.
+The name is blurred but you can make out the title
 Flowers of the World";
-                 name = "flowers of the world"}  
+                 name = "flowers of the world"}
 let hunting_knife = {in_room = true;
                      place = "Prisons";
                      description = "
 a small curved hunting knife.
 It has a lether handle and a carving of a flower on the blade.";
-                     name = "hunting knife"}        
+                     name = "hunting knife"}
 
 (* Rooms *)
 
 let welcome =
   { name = "Welcome"
-  ; doors = [ 
+  ; doors = [
       { direction = "north"; destination = "Basic" };
       { direction = "west"; destination = "Prisons"};
       { direction = "east"; destination = "Library" };
@@ -145,8 +145,8 @@ let statue_garden =
       { direction = "north"; destination = "prisons"};
     ];
     description = "
-You enter a very well lit room. 
-Stone walkways partition off the room into four parts. 
+You enter a very well lit room.
+Stone walkways partition off the room into four parts.
 In one part, there are five stone greek statues.
 Another section has bronze statues.
 The third has wooden abstract structures.
@@ -162,7 +162,7 @@ let prisons =
       { direction = "south"; destination = "Statue Garden"};
     ];
     description = "
-You enter a cold dark room. 
+You enter a cold dark room.
 As you walk in torches along the walls light up.
 You see four cells in the room, one in each corner.
 Withen every cell there is a sleeping prisoner.
@@ -177,8 +177,8 @@ let library =
   ; description = "
 You enter a room with wooden bookshelfs around the room.
 Books fill every shelf.
-A small chair is stationed in the middle of the room. 
-It's legs are nailed down. Three books are in the middle of the room. 
+A small chair is stationed in the middle of the room.
+It's legs are nailed down. Three books are in the middle of the room.
 There is a door to the west.
 "
   }
@@ -195,7 +195,7 @@ There is a door to the south.
 let init =
   { people = []
   ; rooms = [ basic; welcome;library; prisons;statue_garden ]
-  ; items = [ pebble;lantern; red_book; blue_book; green_book; hunting_knife] 
+  ; items = [ pebble;lantern; red_book; blue_book; green_book; hunting_knife]
   }
 
 (*
@@ -228,8 +228,8 @@ let other_people w nick =
 let other_people_in_room w nick roomn =
   drop_nick nick (get_people_in_room w roomn)
 
-let items_in_room w roomn = 
-  List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn)   
+let items_in_room w roomn =
+  List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn)
 
 let drop_item name (items:item list) =
   List.filter items ~f:(fun i -> not (i.name = name))
@@ -247,7 +247,7 @@ let replace_person w person =
 
 
 let inventory w nick =
-  let things_i_have = 
+  let things_i_have =
     List.filter w.items ~f:(fun i -> not (i.in_room) && (i.place = nick)) in
   let thing_names =  List.map things_i_have ~f:(fun i-> i.name) in
   let inv_string = String.concat ~sep:" \n " thing_names  in
@@ -269,8 +269,8 @@ let looking w nick =
         ; String.concat ~sep:" and " names_in_room ^ "."
         ]
     in
-    let items_in_room = 
-      List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn) 
+    let items_in_room =
+      List.filter w.items ~f:(fun i ->i.in_room = true && i.place = roomn)
     in
     let item_description =
       match items_in_room with
@@ -287,21 +287,21 @@ let taking w nick item_name =
   match get_person w nick with
   | None -> assert false
   | Some me ->
-    let items_in_room = 
+    let items_in_room =
       items_in_room w me.roomn
     in
     let item = List.find items_in_room ~f:(fun i -> item_name = i.name) in
     match item with
-    | None -> 
+    | None ->
       let message = "Sorry " ^ nick ^ ". I don't see a " ^ item_name in
       (w, Send_message {nick; message} :: [])
     | Some item ->
-      let new_items = 
-        { item with 
+      let new_items =
+        { item with
           in_room = false
-        ; place = nick 
-        } :: drop_item item_name w.items 
-      in 
+        ; place = nick
+        } :: drop_item item_name w.items
+      in
       let nw = { w with items = new_items } in
       (nw, Send_message{nick; message = "Okay. You now have the " ^ item_name} :: [])
 ;;
@@ -311,14 +311,14 @@ let drop w nick item_name =
   | None -> assert false
   | Some room ->
     let items = List.map w.items ~f:(fun i ->
-      if i.name = item_name 
+      if i.name = item_name
       && not i.in_room
       && i.place = nick
       then { i with in_room = true; place = room.name }
       else i)
     in
     { w with items }
-;;  
+;;
 
 let moving w nick direction =
   let me = List.find_exn w.people ~f:(fun p -> p.nick = nick) in
@@ -385,46 +385,46 @@ let hit w nick vic =
   | Some _, None -> (w, [Send_message {nick; message = "Ha! " ^ vic ^ " isn't a player!"}])
   | Some attacker, Some attacked ->
     if attacker.roomn = attacked.roomn
-    then  
+    then
       let attacked = { attacked with health = attacked.health - 1 } in
       if attacked.health = 0
-      then  
-        let items = List.map w.items ~f:(fun i -> 
-          if i.in_room = false && i.place = nick 
+      then
+        let items = List.map w.items ~f:(fun i ->
+          if i.in_room = false && i.place = nick
           then {i with in_room = false; place = attacker.roomn}
           else i )
         in
         let nw = {w with items} in
         if  vic = nick
-        then 
+        then
           let message = "You kill yourself. You think 'Why the hell did I do that?'" in
-          (nw, [Send_message {nick; message}; Kill_client{nick}])
-        else 
+          (nw, [Send_message {nick; message}; Kick {nick}])
+        else
           (nw,
            [Send_message {nick = vic; message = nick ^ " killed you."};
             Send_message {nick; message = "You killed " ^vic } ;
-            Kill_client {nick = vic} ] )
-      else  if vic = nick 
-      then       
-        (replace_person w attacked, 
-         [Send_message 
-            {nick; message = 
+            Kick {nick = vic} ] )
+      else if vic = nick
+      then
+        (replace_person w attacked,
+         [Send_message
+            {nick; message =
                      "You sock yourself in the face.
-   You think 'That hurt. Why did I do that?'"}]) 
-      else 
-        (replace_person w attacked, 
-         [Send_message 
-            {nick = vic; message = 
-                           "You've been hit by " ^ nick ^ "!"}; 
+   You think 'That hurt. Why did I do that?'"}])
+      else
+        (replace_person w attacked,
+         [Send_message
+            {nick = vic; message =
+                           "You've been hit by " ^ nick ^ "!"};
           Send_message
-            {nick; message = 
+            {nick; message =
                      "You hit " ^ vic ^ "."}
-         ]) 
+         ])
     else
-      (replace_person w attacked, 
-       [Send_message 
-          {nick; message = 
-                   "Sorry! " ^ vic ^ " isn't in this room!"}]) 
+      (replace_person w attacked,
+       [Send_message
+          {nick; message =
+                   "Sorry! " ^ vic ^ " isn't in this room!"}])
 ;;
 
 let nick_added w nick =
@@ -441,7 +441,7 @@ let nick_added w nick =
     in
     let actions = welcome_message :: hello_messages in
     (nw,actions)
-  | Some p ->   
+  | Some p ->
     let person = {p with health = 20 ; roomn = "Welcome"} in
     let nw = { w with people = person :: w.people } in
     let welcome_message =
@@ -467,25 +467,25 @@ let nick_removed w nick =
 let handle_line w nick line =
   match String.split ~on:' ' line with
   | "" :: [] | [] -> (w,[])
-  | "/leave" :: [] -> (w, [Kill_client { nick }])
+  | "/leave" :: [] -> (w, [Kick { nick }])
   | "/help"  :: [] -> (w, [Send_message { nick;message = help }])
   | "/look"  :: [] -> (w, [Send_message { nick; message = looking w nick }])
   | "/move"  :: dir :: [] -> moving w nick dir
-  | "/take" :: name -> taking w nick (String.concat ~sep:" " name) 
+  | "/take" :: name -> taking w nick (String.concat ~sep:" " name)
   | "/hit" :: name :: [] -> hit w nick name
   | "/health" ::[] -> check_health w nick
-  | "/action" :: name -> action w nick (String.concat ~sep:" " name) 
-  | "/drop" :: name :: [] -> 
+  | "/action" :: name -> action w nick (String.concat ~sep:" " name)
+  | "/drop" :: name :: [] ->
     let nw = drop w nick name in
-    let message = 
-      if nw = w then "Sorry, you don't have one of those" 
+    let message =
+      if nw = w then "Sorry, you don't have one of those"
       else "Okay, you have dropped your " ^ name ^ "."
     in
     let actions = [ Send_message { nick; message }] in
     (nw,actions)
   | "/inventory" :: [] -> (w, [Send_message {nick; message = inventory w nick}])
   | "/whisper" :: to_nick :: message ->
-    (w, [Send_message { nick = to_nick  
+    (w, [Send_message { nick = to_nick
                       ; message = nick ^ " whispered: " ^ String.concat ~sep:" " message }])
   | _ ->
     (* just show what was said to everyone in the same room *)

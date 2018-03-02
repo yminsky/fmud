@@ -7,6 +7,16 @@ module Check_nick = struct
   type t = { nick : Nick.t } [@@deriving sexp]
 end
 
+module Nonce : sig
+  type t
+  include Identifiable.S with type t := t
+  val random : Random.State.t -> t
+end = struct
+  let random rstate =
+    Random.State.int32 rstate Int32.max_value
+  include Int32
+end
+
 module Nick_status = struct
   type t = Known_nick | New_nick [@@deriving sexp]
 end
@@ -22,7 +32,7 @@ module Login = struct
 end
 
 module Login_response = struct
-  type t = | Login_accepted of { nonce : Int32.t }
+  type t = | Login_accepted of { nonce : Nonce.t }
            | Wrong_password
            | Unknown_nick
   [@@deriving sexp]
@@ -33,27 +43,23 @@ let login =
 
 module Input = struct
   type t =
-    { nonce: Int32.t
+    { nonce: Nonce.t
     ; input: string
     } [@@deriving sexp]
 end
 
-module Input_response = struct
-  type t = { response: string} [@@deriving sexp]
-end
-
 let input =
-  Rpc.create "input" (module Input) (module Input_response)
+  Rpc.create "input" (module Input) (module Unit)
 
 module Heartbeat = struct
-  type t = { nonce: Int32.t } [@@deriving sexp]
+  type t = { nonce: Nonce.t } [@@deriving sexp]
 end
 
 let heartbeat =
   Rpc.create "heartbeat" (module Heartbeat) (module Unit)
 
 module Poll = struct
-  type t = { nonce: Int32.t } [@@deriving sexp]
+  type t = { nonce: Nonce.t } [@@deriving sexp]
 end
 
 module Poll_response = struct

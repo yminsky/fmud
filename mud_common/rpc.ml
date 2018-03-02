@@ -1,17 +1,17 @@
 open! Base
 
-type ('a,'b) t = 
+type ('a,'b) t =
   { name: string
   ; request: (module Sexpable.S with type t = 'a)
   ; response: (module Sexpable.S with type t = 'b)
   }
 
-let create name request response = 
+let create name request response =
   { name; request; response }
 
 type ('a,'b) rpc = ('a,'b) t
 
-module  Implementation = struct
+module Implementation = struct
   type t = T : ('a,'b) rpc * ('a -> 'b) -> t
 
   let create rpc f = T (rpc,f)
@@ -21,11 +21,11 @@ module Generic_request = struct
   type t = (string * Sexp.t) [@@deriving sexp]
 end
 
-let encode (type request) (type response) 
+let encode (type request) (type response)
       { name
       ; request = (module Request : Sexpable.S with type t = request)
       ; response = (module Response : Sexpable.S with type t = response)
-      } 
+      }
       (request : request)
   =
   let sexp = Generic_request.sexp_of_t (name,Request.sexp_of_t request) in
@@ -45,21 +45,27 @@ module Decoder = struct
 
   let error_s sexp = Error (Error.create_s sexp)
 
-  let  eval t sexp =
+  let eval t sexp =
     match Generic_request.t_of_sexp sexp with
     | exception _ -> error_s [%message "Malformed request" (sexp : Sexp.t)]
     | (name,body) ->
       match Map.find t name with
-      | None -> 
+      | None ->
         error_s [%message "Unknown RPC" (name:string)]
-      | Some (Implementation.T ({request = (module Request); response = (module Response); _},f)) ->
+      | Some (Implementation.T ({request = (module Request)
+                                ; response = (module Response); _},f))
+        ->
         match Request.t_of_sexp body with
-        | exception exn -> 
-          error_s [%message "Couldn't parse body of request" (name:string) (body:Sexp.t) (exn:Exn.t)]
+        | exception exn ->
+          error_s [%message
+            "Couldn't parse body of request"
+              (name:string) (body:Sexp.t) (exn:Exn.t)]
         | request ->
           match f request with
-          | exception exn -> 
-            error_s [%message "Evaluation of request failed" (name:string) (request:Request.t) (exn:Exn.t)]
+          | exception exn ->
+            error_s [%message
+              "Evaluation of request failed"
+                (name:string) (request:Request.t) (exn:Exn.t)]
           | response ->
             Ok (Response.sexp_of_t response)
 end

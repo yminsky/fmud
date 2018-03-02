@@ -5,13 +5,13 @@ open! Base
 type ('a,'b) t
 type ('a,'b) rpc = ('a,'b) t
 
-val create 
-  :  string 
-  -> (module Sexpable.S with type t = 'a) 
+val create
+  :  string
+  -> (module Sexpable.S with type t = 'a)
   -> (module Sexpable.S with type t = 'b)
   -> ('a,'b) t
 
-(** Given an RPC and a query, returns the encoded query, and a function for 
+(** Given an RPC and a query, returns the encoded query, and a function for
     decoding the response. *)
 val encode : ('a,'b) t -> 'a -> Sexp.t * (Sexp.t -> 'b)
 
