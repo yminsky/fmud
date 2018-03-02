@@ -75,9 +75,9 @@ let login () =
         (state, Login_accepted { nonce })
   )
 
-(** apply_action simnply adds the action to the appropriate player's
+(** apply_action adds the action to the appropriate player's
     pending action queue. If no player is found, the action is
-    ingored. *)
+    ignored. *)
 let apply_action (state: _ State.t) (action:action) =
   let nick =
     Nick.of_string (
@@ -93,43 +93,70 @@ let apply_action (state: _ State.t) (action:action) =
   in
   { state with players }
 
-let find_nonce (state:_ State.t) nonce =
-  Map.to_sequence state.players
-  |> Sequence.find ~f:(fun (_,player) ->
-    Option.equal Nonce.equal player.nonce (Some nonce))
+let unknown_nonce nonce =
+  raise_s [%message "Unknown nonce" (nonce:Nonce.t)]
+
+let find_nonce_exn (state:_ State.t) nonce =
+  let player =
+    Map.to_sequence state.players
+    |> Sequence.find ~f:(fun (_,player) ->
+      Option.equal Nonce.equal player.nonce (Some nonce))
+  in
+  match player with
+  | Some x -> x
+  | None -> unknown_nonce nonce
 
 let input () =
   impl P.input (fun state { nonce; input } ->
-    match find_nonce state nonce with
-    | None -> raise_s [%message "Unknown nonce"]
-    | Some (_,player) ->
-      let (world,actions) =
-        state.handlers.handle_line state.world (Nick.to_string player.nick) input
-      in
-      let state = List.fold actions ~init:{ state with world } ~f:apply_action in
-      (state, ())
+    let (_,player) = find_nonce_exn state nonce in
+    let (world,actions) =
+      state.handlers.handle_line state.world (Nick.to_string player.nick) input
+    in
+    let state = List.fold actions ~init:{ state with world } ~f:apply_action in
+    (state, ())
   )
 
 let heartbeat () =
   impl P.heartbeat (fun state { nonce } ->
     let state =
-      match find_nonce state nonce with
-      | None -> state
-      | Some (nick,_) ->
-        { state with
-          players =
-            Map.change state.players nick ~f:(function
-              | None -> None
-              | Some player ->
-                Some { player with last_heartbeat = Time.now () })}
+      let (nick,_) = find_nonce_exn state nonce in
+      { state with
+        players =
+          Map.change state.players nick ~f:(function
+            | None -> None
+            | Some player ->
+              Some { player with last_heartbeat = Time.now () })}
     in
     (state,()))
+
+let poll () =
+  impl P.poll (fun state { nonce } ->
+    let (nick,player) = find_nonce_exn state nonce in
+    let pending = player.pending in
+    let player = { player with pending = Fqueue.empty } in
+    let players = Map.set state.players ~key:nick ~data:player in
+    let state = { state with players } in
+    let result =
+      Fqueue.to_list pending
+      |> List.fold_until ~init:[] ~f:(fun messages action ->
+        match action with
+        | Kick _                           -> Stop messages
+        | Send_message { nick=_; message } -> Continue (message :: messages))
+    in
+    let (responses, disconnect) =
+      match result with
+      | Finished messages      -> (messages, false)
+      | Stopped_early messages -> (messages, true)
+    in
+    (state, { responses; disconnect })
+  )
 
 let rpc_decoder state_ref =
   [ input ()
   ; login ()
   ; check_nick ()
   ; heartbeat ()
+  ; poll ()
   ]
   |> List.map ~f:(fun f -> f state_ref)
   |> Rpc.Decoder.create

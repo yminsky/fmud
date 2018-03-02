@@ -63,7 +63,9 @@ module Poll = struct
 end
 
 module Poll_response = struct
-  type t = { responses : string list } [@@deriving sexp]
+  type t = { responses : string list
+           ; disconnect : bool
+           } [@@deriving sexp]
 end
 
 let poll = Rpc.create "poll" (module Poll) (module Poll_response)
