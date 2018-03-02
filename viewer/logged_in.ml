@@ -12,6 +12,7 @@ module Model = struct
   type t =
     { interactions : Interaction.t Map.M(Int).t
     ; current_input : string
+    ; nonce : Nonce.t
     } [@@deriving sexp, fields, compare]
 
   let next_interaction t =
@@ -25,7 +26,7 @@ module Model = struct
         ~key:(next_interaction t)
         ~data:(Input { text = t.current_input; posted = false })
     in
-    { interactions ; current_input = "" }
+    { t with interactions ; current_input = "" }
 
   let add_response t response =
     let interactions =
@@ -38,9 +39,10 @@ module Model = struct
   let update_input t current_input =
     { t with current_input }
 
-  let empty =
+  let create nonce =
     { interactions = Map.empty (module Int)
     ; current_input = ""
+    ; nonce
     }
 end
 
@@ -53,21 +55,12 @@ module Action = struct
   [@@deriving sexp]
 end
 
-module State = struct
-  type t =
-    { schedule : Action.t -> unit
-    ; mutable poll_in_flight: bool
-    }
-end
-
-let apply_action action model state =
+let apply_action action model =
   match (action:Action.t) with
   | Submit_input      -> Model.submit_input model
   | Add_response text -> Model.add_response model text
   | Update_input text -> Model.update_input model text
-  | Poll ->
-    ignore state;
-    assert false
+  | Poll -> assert false
 
 let update_visibility m = m
 

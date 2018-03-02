@@ -15,6 +15,7 @@ end
 module Action = struct
   type t =
     | Submit_input
+    | Report_nonce of Nonce.t
     | Logged_in of Logged_in.Action.t
     | Login of Login.Action.t
   [@@deriving sexp]
@@ -26,7 +27,29 @@ module State = struct
   type t = { schedule : Action.t -> unit }
 end
 
-let apply_action = assert false
+let submit_input (model:Model.t) (state:State.t) =
+  match model with
+  | Login m -> 
+    Model.Login (
+      Login.submit_input m
+        ~schedule:(fun action -> state.schedule (Login action))
+        ~report_nonce:(fun nonce -> state.schedule (Report_nonce nonce)))
+  | Logged_in m ->
+    Model.Logged_in (Logged_in.apply_action Submit_input m)
+
+let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
+  match action with
+  | Submit_input -> submit_input model state
+  | Logged_in action ->
+    (match model with
+     | Logged_in model -> Logged_in (Logged_in.apply_action action model)
+     | _ -> model)
+  | Login action ->
+    (match model with
+     | Login model -> Login (Login.apply_action action model state)
+     | _ -> model)
+  | Report_nonce nonce ->
+    Logged_in (Logged_in.Model.create nonce)
 
 let on_startup ~schedule (_ : Model.t) =
   Async_kernel.return { State. schedule }
