@@ -1,9 +1,10 @@
 open Core
 open Async
-module P        = Mud_common.Protocol
-module Rpc      = Mud_common.Rpc
 module Hashtbl  = Base.Hashtbl
 module Map      = Base.Map
+
+module P        = Mud_common.Protocol
+module Rpc      = Mud_common.Rpc
 module Nick     = P.Nick
 module Password = P.Password
 module Nonce    = P.Nonce
@@ -20,6 +21,7 @@ module Player = struct
     ; password : Password.t
     ; pending : action Fqueue.t
     ; nonce : Nonce.t option
+    ; last_heartbeat : Time.t
     }
 end
 
@@ -35,32 +37,32 @@ end
 
 module State = struct
   type 'world t =
-    { world     : 'world
-    ; players   : Player.t Map.M(Nick).t
-    ; handlers  : 'world Handlers.t
-    ; rstate    : Random.State.t
+    { world          : 'world
+    ; players        : Player.t Map.M(Nick).t
+    ; handlers       : 'world Handlers.t
+    ; rstate         : Random.State.t
     } [@@deriving fields]
 end
 
 (** An RPC that can update the state *)
-let impl (state_ref : _ State.t ref) rpc f =
-  Rpc.Implementation.create rpc (fun input ->
-    let state = !state_ref in
-    let (state,response) = f state input in
-    state_ref := state;
-    response)
+let impl rpc f =
+  (fun (state_ref : _ State.t ref) ->
+     Rpc.Implementation.create rpc (fun input ->
+       let state = !state_ref in
+       let (state,response) = f state input in
+       state_ref := state;
+       response))
 
 (** An RPC that leaves the state unchanged. *)
-let impl' state_ref rpc f =
-  impl state_ref rpc (fun state input ->
-    (state, f state input))
+let impl' rpc f =
+  impl rpc (fun state input -> (state, f state input))
 
-let check_nick state_ref =
-  impl' state_ref P.check_nick (fun state {nick} ->
+let check_nick () =
+  impl' P.check_nick (fun state {nick} ->
     if Map.mem state.players nick then Known_nick else New_nick)
 
-let login state_ref =
-  impl state_ref P.login (fun state { nick; password } ->
+let login () =
+  impl P.login (fun state { nick; password } ->
     match Map.find state.players nick with
     | None -> (state, Unknown_nick)
     | Some player ->
@@ -91,14 +93,14 @@ let apply_action (state: _ State.t) (action:action) =
   in
   { state with players }
 
-let input state_ref  =
-  impl state_ref P.input (fun state { nonce; input } ->
-    let player =
-      Map.to_sequence state.players
-      |> Sequence.find ~f:(fun (_,player) ->
-        Option.equal Nonce.equal player.nonce (Some nonce))
-    in
-    match player with
+let find_nonce (state:_ State.t) nonce =
+  Map.to_sequence state.players
+  |> Sequence.find ~f:(fun (_,player) ->
+    Option.equal Nonce.equal player.nonce (Some nonce))
+
+let input () =
+  impl P.input (fun state { nonce; input } ->
+    match find_nonce state nonce with
     | None -> raise_s [%message "Unknown nonce"]
     | Some (_,player) ->
       let (world,actions) =
@@ -108,14 +110,31 @@ let input state_ref  =
       (state, ())
   )
 
-let rpc_decoder state_ref =
-  Rpc.Decoder.create
-    [ input state_ref
-    ; login state_ref
-    ; check_nick state_ref
-    ]
+let heartbeat () =
+  impl P.heartbeat (fun state { nonce } ->
+    let state =
+      match find_nonce state nonce with
+      | None -> state
+      | Some (nick,_) ->
+        { state with
+          players =
+            Map.change state.players nick ~f:(function
+              | None -> None
+              | Some player ->
+                Some { player with last_heartbeat = Time.now () })}
+    in
+    (state,()))
 
-let main (handlers:_ Handlers.t) ~port =
+let rpc_decoder state_ref =
+  [ input ()
+  ; login ()
+  ; check_nick ()
+  ; heartbeat ()
+  ]
+  |> List.map ~f:(fun f -> f state_ref)
+  |> Rpc.Decoder.create
+
+let main (handlers : _ Handlers.t) ~port =
   let state_ref =
     ref { State.
           world = handlers.init
