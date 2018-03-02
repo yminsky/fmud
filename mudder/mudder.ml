@@ -182,7 +182,10 @@ let main (handlers : _ Handlers.t) ~port =
            let%bind request = Or_error.try_with (fun () -> Sexp.of_string body) in
            Rpc.Decoder.eval decoder request
          in
-         Server.respond_string (Sexp.to_string [%sexp (response : Sexp.t Or_error.t)]))
+         let response = [%sexp (response : Sexp.t Or_error.t)] in
+         print_s [%message
+           "Request" (body : string) (response : Sexp.t)];
+         Server.respond_string (Sexp.to_string response))
   in
   Deferred.never ()
 

@@ -14,12 +14,16 @@ module Model = struct
     { nick : string
     ; password : string
     ; status : status
-    ; error : (unit,error) Result.t
+    ; errors : error list
     } [@@deriving sexp, fields, compare]
 
   let cutoff t1 t2 = compare t1 t2 = 0
 
-  let empty = { nick = "" ; password = "" ; status = Awaiting_input; error = Ok () }
+  let empty = { nick = "" 
+              ; password = "" 
+              ; status = Awaiting_input
+              ; errors = []
+              }
 end
 
 module Action = struct
@@ -37,7 +41,7 @@ include struct
     match action with
     | Update_nick nick -> { model with nick }
     | Update_password password -> { model with password }
-    | Report_error error -> { Model.empty with error = Error error }
+    | Report_error error -> { Model.empty with errors = error :: model.errors }
 
   let submit_input (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
     don't_wait_for begin match%map
@@ -61,9 +65,9 @@ end
 open Vdom
 
 let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
-  let { Model.nick; password; status; error } = m in
+  let { Model.nick; password; status; errors } = m in
   let input name ~current update = 
-    [ Node.text name
+    [ Node.text (name ^ " ")
     ; Node.input
       [ Attr.type_ "text"
       ; Attr.string_property "value" current
@@ -75,22 +79,22 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   let inputs =
     List.concat
       [ input "password" ~current:password (fun x -> Update_password x)
-      ; input "nick" ~current:nick (fun x -> Update_nick x) ]
+      ; [Node.create "br" [] []]
+      ; input "nickname" ~current:nick (fun x -> Update_nick x) ]
   in
-  let error =
-    match error with
-    | Ok () -> []
-    | Error (String text) -> 
-      [ Node.text ("ERROR: " ^ text) 
-      ; Node.create "br" [] [] ]
-    | Error (Ordinary err) ->
-      [ Node.text ("ERROR:\n" ^ Error.to_string_hum err)
-      ; Node.create "br" [] [] ]
+  let errors =
+    List.bind errors ~f:(fun error ->
+      let text =
+        match error with
+        | String s -> "ERROR: " ^ s
+        | Ordinary e -> "ERROR:\n" ^ Error.to_string_hum e
+      in
+      [ Node.text text; Node.create "br" [] [] ])
   in
   let status =
     match status with
     | Awaiting_input -> []
     | Logging_in -> [ Node.create "br" [] []; Node.text "Logging in..."]
   in
-  Node.div [] (List.concat [ error; inputs; status ])
+  Node.div [] (List.concat [ errors; inputs; status ])
   
