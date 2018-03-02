@@ -13,7 +13,7 @@ val create
 
 (** Given an RPC and a query, returns the encoded query, and a function for
     decoding the response. *)
-val encode : ('a,'b) t -> 'a -> Sexp.t * (Sexp.t -> 'b)
+val encode : ('a,'b) t -> 'a -> Sexp.t * (Sexp.t -> 'b Or_error.t)
 
 module Implementation : sig
   type t

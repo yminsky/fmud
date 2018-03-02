@@ -1,5 +1,11 @@
 open! Base
 open Incr_dom
+module Rpc = Mud_common.Rpc
+
+module P = Mud_common.Protocol
+module Nick = P.Nick
+module Nonce = P.Nonce
+module Password = P.Password
 
 module Interaction = struct
   type t =
@@ -78,16 +84,21 @@ let update_visibility m = m
 
 open Async_kernel
 
-let on_startup ~schedule (_ : Model.t) =
+let login nick password =
+  Rpc_client.request P.login { nick; password }
+
+let poll ~schedule =
   let rec loop () =
     schedule Action.Poll;
     upon (Async_js.sleep 0.5) (fun () -> loop ())
   in
-  loop ();
+  loop ()
+
+let on_startup ~schedule (_ : Model.t) =
+  poll ~schedule;
   return { State. schedule; poll_in_flight = false }
 
 let on_display ~old:_ _ _ = ()
-
 
 let key_handler ~(inject : Action.t -> _) =
   let open Vdom in
@@ -96,7 +107,7 @@ let key_handler ~(inject : Action.t -> _) =
     | Enter ->  inject Submit_input
     | _ -> Event.Ignore
   )
-;;
+
 
 let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
   let open Incr.Let_syntax in
@@ -125,4 +136,3 @@ let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
     Node.div [] interactions
   in
   Node.body [ key_handler ~inject ] [ entries ; input ]
-;;

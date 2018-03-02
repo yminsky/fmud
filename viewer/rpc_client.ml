@@ -18,5 +18,4 @@ let request rpc arg =
       match decode response with
       | exception exn ->
         error_s [%message "Decoding of response failed" (response:Sexp.t) (exn:Exn.t)]
-      | response ->
-        Ok response)
+      | response -> response)
