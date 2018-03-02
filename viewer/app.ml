@@ -4,7 +4,7 @@ open! Import
 module Model = struct
   type t =
     | Login of Login.Model.t
-    | Logged_in of Logged_in.Model.t
+    | Main_page of Main_page.Model.t
   [@@deriving sexp, compare]
                  
   let empty = Login Login.Model.empty
@@ -16,7 +16,7 @@ module Action = struct
   type t =
     | Submit_input
     | Report_nonce of Nonce.t
-    | Logged_in of Logged_in.Action.t
+    | Main_page of Main_page.Action.t
     | Login of Login.Action.t
   [@@deriving sexp]
   
@@ -34,22 +34,22 @@ let submit_input (model:Model.t) (state:State.t) =
       Login.submit_input m
         ~schedule:(fun action -> state.schedule (Login action))
         ~report_nonce:(fun nonce -> state.schedule (Report_nonce nonce)))
-  | Logged_in m ->
-    Model.Logged_in (Logged_in.apply_action Submit_input m)
+  | Main_page m ->
+    Model.Main_page (Main_page.apply_action Submit_input m)
 
 let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
   match action with
   | Submit_input -> submit_input model state
-  | Logged_in action ->
+  | Main_page action ->
     (match model with
-     | Logged_in model -> Logged_in (Logged_in.apply_action action model)
+     | Main_page model -> Main_page (Main_page.apply_action action model)
      | _ -> model)
   | Login action ->
     (match model with
      | Login model -> Login (Login.apply_action action model state)
      | _ -> model)
   | Report_nonce nonce ->
-    Logged_in (Logged_in.Model.create nonce)
+    Main_page (Main_page.Model.create nonce)
 
 let on_startup ~schedule (_ : Model.t) =
   Async_kernel.return { State. schedule }
@@ -71,7 +71,7 @@ let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
   let inner =
     match m with
     | Login m -> Login.view m ~inject:(fun a -> inject (Login a))
-    | Logged_in m -> Logged_in.view m ~inject:(fun a -> inject (Logged_in a))
+    | Main_page m -> Main_page.view m ~inject:(fun a -> inject (Main_page a))
   in
   Node.body [ key_handler ~inject ] [ inner ]
 
