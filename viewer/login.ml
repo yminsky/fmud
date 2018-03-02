@@ -83,11 +83,11 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
       ; input "nickname" ~current:nick (fun x -> Update_nick x) ]
   in
   let errors =
-    List.bind errors ~f:(fun error ->
+    List.bind (List.rev errors) ~f:(fun error ->
       let text =
         match error with
-        | String s -> "ERROR: " ^ s
-        | Ordinary e -> "ERROR:\n" ^ Error.to_string_hum e
+        | String s -> s
+        | Ordinary e -> Error.to_string_hum e
       in
       [ Node.text text; Node.create "br" [] [] ])
   in
