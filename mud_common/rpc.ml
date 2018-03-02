@@ -29,7 +29,7 @@ let encode (type request) (type response)
       (request : request)
   =
   let sexp = Generic_request.sexp_of_t (name,Request.sexp_of_t request) in
-  let response_decoder = Response.t_of_sexp in
+  let response_decoder = Or_error.t_of_sexp Response.t_of_sexp in
   (sexp,response_decoder)
 ;;
 
@@ -52,8 +52,9 @@ module Decoder = struct
       match Map.find t name with
       | None ->
         error_s [%message "Unknown RPC" (name:string)]
-      | Some (Implementation.T ({request = (module Request)
-                                ; response = (module Response); _},f))
+      | Some (Implementation.T
+                ({request = (module Request)
+                 ; response = (module Response); _},f))
         ->
         match Request.t_of_sexp body with
         | exception exn ->

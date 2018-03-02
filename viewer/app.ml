@@ -2,68 +2,77 @@ open! Base
 open Incr_dom
 
 module Interaction = struct
-  type t = 
-    { input: string
-    ; response: string }
+  type t =
+    | Input of { text: string; posted: bool }
+    | Response of string
   [@@deriving sexp, compare]
 end
 
 module Model = struct
-  type t = 
+  type t =
     { interactions : Interaction.t Map.M(Int).t
     ; current_input : string
-    ; counter : int
     } [@@deriving sexp, fields, compare]
 
+  let next_interaction t =
+    match Map.max_elt t.interactions with
+    | None -> 0
+    | Some (i,_) -> i + 1
+
   let submit_input t =
-    let index =
-      match Map.max_elt t.interactions with
-      | None -> 0
-      | Some (i,_) -> i + 1
-    in  
-    let new_interaction =
-      { Interaction.input = t.current_input
-      ; response = Printf.sprintf {|You said "%s" at counter %d|} t.current_input t.counter
-      } 
-    in  
-    { t with
-      interactions = Map.set t.interactions ~key:index ~data:new_interaction
-    ; current_input = "" }
+    let interactions =
+      Map.set t.interactions
+        ~key:(next_interaction t)
+        ~data:(Input { text = t.current_input; posted = false })
+    in
+    { interactions ; current_input = "" }
+
+  let add_response t response =
+    let interactions =
+      Map.set t.interactions
+        ~key:(next_interaction t)
+        ~data:(Response response)
+    in
+    { t with interactions }
 
   let update_input t current_input =
     { t with current_input }
 
-  let click_counter t = { t with counter = t.counter + 1}
-
   let cutoff t1 t2 =
     compare t1 t2 = 0
 
-  let empty = 
+  let empty =
     { interactions = Map.empty (module Int)
     ; current_input = ""
-    ; counter = 0
     }
 end
 
 module Action = struct
   type t =
     | Submit_input
+    | Add_response of string
     | Update_input of string
-    | Click_counter
+    | Poll
   [@@deriving sexp]
 
   let should_log (_:t) = true
 end
 
 module State = struct
-  type t = { schedule : Action.t -> unit }
+  type t =
+    { schedule : Action.t -> unit
+    ; mutable poll_in_flight: bool
+    }
 end
 
-let apply_action action model _state =
+let apply_action action model state =
   match (action:Action.t) with
-  | Submit_input -> Model.submit_input model
+  | Submit_input      -> Model.submit_input model
+  | Add_response text -> Model.add_response model text
   | Update_input text -> Model.update_input model text
-  | Click_counter -> Model.click_counter model
+  | Poll ->
+    ignore state;
+    assert false
 
 let update_visibility m = m
 
@@ -71,11 +80,11 @@ open Async_kernel
 
 let on_startup ~schedule (_ : Model.t) =
   let rec loop () =
-    schedule Action.Click_counter;
-    upon (Async_js.sleep 0.1) (fun () -> loop ())
-  in  
+    schedule Action.Poll;
+    upon (Async_js.sleep 0.5) (fun () -> loop ())
+  in
   loop ();
-  return { State. schedule }
+  return { State. schedule; poll_in_flight = false }
 
 let on_display ~old:_ _ _ = ()
 
@@ -87,7 +96,7 @@ let key_handler ~(inject : Action.t -> _) =
     | Enter ->  inject Submit_input
     | _ -> Event.Ignore
   )
-;;  
+;;
 
 let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
   let open Incr.Let_syntax in
@@ -100,24 +109,20 @@ let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
       ; Attr.on_input (fun _ev text -> inject (Update_input text))
       ; Attr.create "size" "80"
       ] []
-  in  
-  let entries =  
-    let interactions = 
+  in
+  let entries =
+    let interactions =
       Map.data m.interactions
-      |> List.bind ~f:(fun entry -> 
-        [ Node.text entry.input
-        ; Node.create "br" [] []
-        ; Node.create "em" [] [Node.text entry.response]
-        ; Node.create "br" [] []
-        ; Node.create "hr" [] []
-        ])
-    in  
+      |> List.bind ~f:(function
+        | Input {text;posted} ->
+          [ Node.text text
+          ; Node.text (if posted then "..." else ":")
+          ; Node.create "br" [] []]
+        | Response text ->
+          [ Node.create "em" [] [Node.text text]
+          ; Node.create "br" [] [] ])
+    in
     Node.div [] interactions
-  in  
-  Node.body [ key_handler ~inject ] 
-    [ Node.text (Int.to_string m.counter)
-    ; entries
-    ; input ]
+  in
+  Node.body [ key_handler ~inject ] [ entries ; input ]
 ;;
-
-

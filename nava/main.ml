@@ -502,6 +502,7 @@ let handle_line w nick line =
     (w,actions)
 
 let () =
+  printf "Starting mud!\n%!";
   start_mud
     { init
     ; description
