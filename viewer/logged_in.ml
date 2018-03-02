@@ -1,11 +1,5 @@
 open! Base
-open Incr_dom
-module Rpc = Mud_common.Rpc
-
-module P = Mud_common.Protocol
-module Nick = P.Nick
-module Nonce = P.Nonce
-module Password = P.Password
+open! Import
 
 module Interaction = struct
   type t =
@@ -108,6 +102,7 @@ let key_handler ~(inject : Action.t -> _) =
     | _ -> Event.Ignore
   )
 
+let _v = Login.view
 
 let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
   let open Incr.Let_syntax in
