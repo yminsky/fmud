@@ -4,5 +4,5 @@ open! Js_of_ocaml
 
 let () =
   Start_app.simple
-    (module Logged_in)
-    ~initial_model:Logged_in.Model.empty
+    (module App)
+    ~initial_model:App.init_model
