@@ -3,6 +3,6 @@
 (executables
  ((names (server client))
   (flags (:standard -safe-string -short-paths))
-  (libraries (core mudder))
+  (libraries (core mudder cohttp-async))
   (preprocess (pps (ppx_jane)))
   ))

@@ -1,162 +1,121 @@
 open Core
 open Async
-
-module Nick : Identifiable = String
-module Password : Identifiable = String
+module P = Mud_common.Protocol
+module Rpc = Mud_common.Rpc
+module Hashtbl = Base.Hashtbl
+module Map = Base.Map
+module Nick = P.Nick
+module Password = P.Password
+open Cohttp_async
 
 type action =
   | Send_message of { nick: string; message: string }
   | Kill_client  of { nick: string }
 [@@deriving sexp]
 
-type client =
-  { nick: Nick.t
-  ; r: Reader.t
-  ; w: Writer.t
-  }
+module Nick_event = struct
+  type t = | Message of string
+           | Kill
+end
 
-type 'world handlers =
-  { init : 'world
-  ; description : string
-  ; handle_line : 'world -> string -> string -> 'world * action list
-  ; nick_added : 'world -> string -> 'world * action list
-  ; nick_removed : 'world -> string -> 'world * action list
-  }
-[@@deriving sexp]
+module Nick_state = struct
+  type t =
+    { nick : Nick.t
+    ; password : Password.t
+    ; pending : Nick_event.t Fqueue.t
+    ; nonce : Int32.t option
+    }
+end
 
-type 'world state =
-  { mutable world : 'world
-  ; clients       : client Nick.Table.t
-  ; passwords     : Password.t Nick.Table.t
-  }
+module Handlers = struct
+  type 'world t =
+    { init : 'world
+    ; description  : string
+    ; handle_line  : 'world -> string -> string -> 'world * action list
+    ; nick_added   : 'world -> string -> 'world * action list
+    ; nick_removed : 'world -> string -> 'world * action list
+    }
+end
 
-let rec remove_client (s:_ state) (h:_ handlers) (c:client) =
-  let%bind () = Writer.close c.w in
-  let%bind () = Reader.close c.r in
-  Hashtbl.remove s.clients c.nick;
-  let (new_world,actions) = h.nick_removed s.world (Nick.to_string c.nick) in
-  s.world <- new_world;
-  run_actions s h actions
+module State = struct
+  type 'world t =
+    { world     : 'world
+    ; nicks     : Nick_state.t Map.M(Nick).t
+    ; handlers  : 'world Handlers.t
+    } [@@deriving fields]
+end
 
-and run_actions (s:_ state) (h:_ handlers) actions : unit Deferred.t =
-  Deferred.List.iter actions ~f:(fun action ->
-    (* Debug output *)
-    print_endline (Sexp.to_string_hum (sexp_of_action action));
-    begin match action with
-    | Send_message { nick; message } ->
-      let nick = Nick.of_string nick in
-      begin match Hashtbl.find s.clients nick with
-      | None -> ()
-      | Some c -> Writer.write_line c.w (String.strip message)
-      end;
-      Deferred.unit
-    | Kill_client { nick } ->
-      let nick = Nick.of_string nick in
-      begin match Hashtbl.find s.clients nick with
-      | None -> Deferred.unit
-      | Some c -> remove_client s h c
-      end
-    end)
+let run_action (s:_ State.t) action =
+  print_s [%message "run_action" (action : action)];
+  match action with
+  | Send_message { nick; message } ->
+    let nick = Nick.of_string nick in
+    let nicks =
+      Map.change s.nicks nick ~f:(function
+        | None -> None
+        | Some nick_state ->
+          let pending =
+            Fqueue.enqueue nick_state.pending (Message message)
+          in
+          Some { nick_state with pending })
+    in
+    { s with nicks }
+  | Kill_client { nick } ->
+    let nicks =
+      Map.change s.nicks (Nick.of_string nick) ~f:(function
+        | None -> None
+        | Some nick_state ->
+          let pending = Fqueue.enqueue nick_state.pending Kill in
+          Some { nick_state with pending })
+    in
+    { s with nicks }
 
-let input_loop (s:_ state) (h:_ handlers) (c:client) =
-  let rec loop () =
-    match%bind Monitor.try_with (fun () -> Reader.read_line c.r) with
-    | Ok `Eof | Error _ -> remove_client s h c
-    | Ok (`Ok line) ->
-      let (new_world,actions) = h.handle_line s.world (Nick.to_string c.nick) line in
-      s.world <- new_world;
-      let%bind () = run_actions s h actions in
-      loop ()
-  in
-  loop ()
+let impl = Rpc.Implementation.create
 
-let close r w =
-  let%bind () = Reader.close r in
-  Writer.close w
+let check_nick (state_ref : _ State.t ref) =
+  impl P.check_nick (fun {nick} ->
+    let state = !state_ref in
+    if Map.mem state.nicks nick then Known_nick else New_nick)
 
-let prompt r w prompt =
-  Writer.write w (prompt ^ ": ");
-  match%map Monitor.try_with (fun () -> Reader.read_line r) with
-  | Ok `Eof | Error _ -> None
-  | Ok (`Ok response) -> Some response
-;;
-
-(** To be called after a password has been verified. *)
-let start_client s handlers r w nick =
-  let c = { nick; r; w } in
-  Hashtbl.set s.clients ~key:nick ~data:c;
-  let (new_world, actions) = 
-    handlers.nick_added s.world (Nick.to_string nick) 
-  in
-  s.world <- new_world;
-  let%bind () = run_actions s handlers actions in
-  input_loop s handlers c
-;;
-
-let build_connection_handler handlers =
-  let s = { world = handlers.init
-          ; clients = Nick.Table.create ()
-          ; passwords = Nick.Table.create ()
-          }
-  in
-  stage (fun r w ->
-    Writer.write_line w handlers.description;
-    match%bind prompt r w "nick" with
-    | None -> close r w
-    | Some nick ->
-      let nick = Nick.of_string nick in
-      match Hashtbl.find s.clients nick with
-      | Some _ ->
-        Writer.write_line w "Someone is already logged in with that nick.";
-        let%bind () = Writer.flushed w in
-        close r w
-      | None ->
-        match Hashtbl.find s.passwords nick with
-        | None ->
-          Writer.write_line w "Hey, you're new here! Please pick a password.";
-          let%bind () = Writer.flushed w in
-          begin match%bind prompt r w "new password" with
-          | None -> close r w
-          | Some password ->
-            let password = Password.of_string password in
-            Hashtbl.set s.passwords ~key:nick ~data:password;
-            start_client s handlers r w nick
-          end
-        | Some expected_password ->
-          begin match%bind prompt r w "pw" with
-          | None -> close r w
-          | Some password ->
-            let password = Password.of_string password in
-            if not (Password.equal expected_password password) then (
-              Writer.write_line w "Wrong password. Bye.";
-              let%bind () = Writer.flushed w in
-              close r w
-            ) else (
-              start_client s handlers r w nick
-            )
-          end
+let login (state_ref : _ State.t ref) =
+  impl P.login (fun { nick; password } ->
+    let state = !state_ref in
+    match Map.find state.nicks nick with
+    | None -> Unknown_nick
+    | Some ns ->
+      if Password.(<>) ns.password password then Wrong_password
+      else
+        let nonce = Random.int32 Int32.max_value in
+        let ns = { ns with nonce = Some nonce } in
+        let nicks = Map.set state.nicks ~key:nick ~data:ns in
+        state_ref := { state with nicks };
+        Login_accepted { nonce }
   )
 
-let start_mud h =
+let input (state_ref : _ State.t ref) =
+  impl P.input (fun { nonce; input } ->
+    let state = !state_ref in
+    match Map.find state.nicks
+  )
+
+let main handlers ~port =
+  let%bind _server =
+    Server.create
+      ~on_handler_error:`Raise
+      (Tcp.Where_to_listen.of_port port)
+      (fun ~body:_ _ _ ->
+         Server.respond_string "<html><body><b>WooT!</b></body></html>")
+  in
+  Deferred.never ()
+
+let start_mud handlers =
+  let open Command.Let_syntax in
   Command.async
-    ~summary:"A mud!"
-    (let open Command.Let_syntax in
-     [%map_open
-       let port = 
-         flag "-port" (optional_with_default 12321 int)
-           ~doc:"PORT the port to listen on" 
-       in
-       fun () ->
-         let open Deferred.Let_syntax in
-         let handle_connection = unstage (build_connection_handler h) in
-         printf "Starting accept loop.\n";
-         let%bind server = 
-           Tcp.Server.create
-             ~on_handler_error:(`Call (fun _addr exn ->
-               print_endline @@ Sexp.to_string_hum @@
-               [%message "Unexpected exception" ~_:(exn:Exn.t)]))
-             (Tcp.Where_to_listen.of_port port)
-             (fun _addr -> handle_connection)
-         in
-         Tcp.Server.close_finished server])
+    ~summary:"Start a hello world Async server"
+    [%map_open
+      let port =
+        flag "-p" (optional_with_default 8080 int)
+          ~doc:"int Source port to listen on"
+      in
+      fun () -> main handlers port ]
   |> Command.run

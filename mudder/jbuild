@@ -3,6 +3,6 @@
 (library
  ((name mudder)
   (flags (:standard -safe-string -short-paths))
-  (libraries (core async httpaf-async mud_protocol))
+  (libraries (core async cohttp-async mud_common))
   (preprocess (pps (ppx_jane)))
   ))

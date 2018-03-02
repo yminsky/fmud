@@ -1,7 +1,7 @@
 (jbuild_version 1)
 
 (library
- ((name mud_protocol)
+ ((name mud_common)
   (flags (:standard -safe-string -short-paths))
   (libraries (base))
   (preprocess (pps (ppx_jane)))
