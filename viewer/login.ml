@@ -44,21 +44,27 @@ include struct
     | Report_error error -> { Model.empty with errors = error :: model.errors }
 
   let submit_input (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
-    don't_wait_for begin match%map
-        Rpc_client.request P.login
-          { nick = Nick.of_string model.nick
-          ; password = Password.of_string model.password }
-      with
-      | Error error -> 
-        schedule (Report_error (Ordinary error))
-      | Ok Wrong_password -> 
-        schedule (Report_error (String "Wrong password. Try again!"))
-      | Ok Unknown_nick ->
-        let msg = "Unknown nick. Update the code to register this nick!" in
-        schedule (Report_error (String msg))
-      | Ok Login_accepted { nonce } ->
-        report_nonce nonce
-    end;
+    let nick     = String.strip model.nick     in
+    let password = String.strip model.password in
+    if String.is_empty model.nick
+    || String.is_empty model.password then
+      schedule (Report_error (String "Password and nickname must both be non-empty"))
+    else 
+      don't_wait_for begin match%map
+          Rpc_client.request P.login
+            { nick     = Nick.of_string nick
+            ; password = Password.of_string password }
+        with
+        | Error error -> 
+          schedule (Report_error (Ordinary error))
+        | Ok Wrong_password -> 
+          schedule (Report_error (String "Wrong password. Try again!"))
+        | Ok Unknown_nick ->
+          let msg = "Unknown nick. Update the code to register this nick!" in
+          schedule (Report_error (String msg))
+        | Ok Login_accepted { nonce } ->
+          report_nonce nonce
+      end;
     { model with status = Logging_in }
 end
 

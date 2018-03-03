@@ -185,7 +185,9 @@ let main (handlers : _ Handlers.t) ~port =
          let response = [%sexp (response : Sexp.t Or_error.t)] in
          print_s [%message
            "Request" (body : string) (response : Sexp.t)];
-         Server.respond_string (Sexp.to_string response))
+         Server.respond_string
+           ~headers:(Cohttp.Header.of_list ["Access-Control-Allow-Origin", "*"])
+           (Sexp.to_string response))
   in
   Deferred.never ()
 
