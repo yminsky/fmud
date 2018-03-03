@@ -50,13 +50,6 @@ end
 let input =
   Rpc.create "input" (module Input) (module Unit)
 
-module Heartbeat = struct
-  type t = { nonce: Nonce.t } [@@deriving sexp]
-end
-
-let heartbeat =
-  Rpc.create "heartbeat" (module Heartbeat) (module Unit)
-
 module Poll = struct
   type t = { nonce: Nonce.t } [@@deriving sexp]
 end

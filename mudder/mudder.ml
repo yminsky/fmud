@@ -21,7 +21,7 @@ module Player = struct
     ; password : Password.t
     ; pending : action Fqueue.t
     ; nonce : Nonce.t option
-    ; last_heartbeat : Time.t
+    ; last_poll : Time_ns.t
     }
 end
 
@@ -106,7 +106,7 @@ let register () =
       let state = 
         State.set_player state
           { nick; password; pending = Fqueue.empty
-          ; nonce = Some nonce; last_heartbeat = Time.now () }
+          ; nonce = Some nonce; last_poll = Time_ns.now () }
       in
       let (world, actions) = 
         state.handlers.nick_added state.world (Nick.to_string nick)
@@ -137,19 +137,6 @@ let input () =
     (state, ())
   )
 
-let heartbeat () =
-  impl P.heartbeat (fun state { nonce } ->
-    let state =
-      let (nick,_) = find_nonce_exn state nonce in
-      { state with
-        players =
-          Map.change state.players nick ~f:(function
-            | None -> None
-            | Some player ->
-              Some { player with last_heartbeat = Time.now () })}
-    in
-    (state,()))
-
 let poll () =
   impl P.poll (fun state { nonce } ->
     let (_,player) = find_nonce_exn state nonce in
@@ -166,7 +153,7 @@ let poll () =
       | Finished messages      -> (messages, false)
       | Stopped_early messages -> (messages, true)
     in
-    let player = { player with pending = Fqueue.empty } in
+    let player = { player with pending = Fqueue.empty; last_poll = Time_ns.now () } in
     let state = State.set_player state player in
     let state =
       if not kicked then state
@@ -183,7 +170,6 @@ let poll () =
 let rpc_decoder state_ref =
   [ input ()
   ; login ()
-  ; heartbeat ()
   ; poll ()
   ; register ()
   ]
