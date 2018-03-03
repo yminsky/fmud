@@ -73,7 +73,7 @@ end
 
 module Poll_response = struct
   type t = { responses : string list
-           ; disconnect : bool
+           ; kicked : bool
            } [@@deriving sexp]
 end
 

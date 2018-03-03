@@ -158,12 +158,12 @@ let poll () =
         | Kick _                           -> Stop messages
         | Send_message { nick=_; message } -> Continue (message :: messages))
     in
-    let (responses, disconnect) =
+    let (responses, kicked) =
       match result with
       | Finished messages      -> (messages, false)
       | Stopped_early messages -> (messages, true)
     in
-    (state, { responses; disconnect })
+    (state, { responses; kicked })
   )
 
 let rpc_decoder state_ref =

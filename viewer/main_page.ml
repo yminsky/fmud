@@ -1,5 +1,8 @@
 open! Base
+open! Stdio
+module Time = Core_kernel.Time
 open! Import
+let log_s = Async_js.log_s
 
 module Interaction = struct
   type t =
@@ -13,6 +16,9 @@ module Model = struct
     { interactions : Interaction.t Map.M(Int).t
     ; current_input : string
     ; nonce : Nonce.t
+    ; last_error : Error.t option
+    ; kicked : bool
+    ; poll_in_flight : bool
     } [@@deriving sexp, fields, compare]
 
   let next_interaction t =
@@ -28,6 +34,9 @@ module Model = struct
     in
     { t with interactions ; current_input = "" }
 
+  let update_input t current_input =
+    { t with current_input }
+
   let add_response t response =
     let interactions =
       Map.set t.interactions
@@ -36,55 +45,80 @@ module Model = struct
     in
     { t with interactions }
 
-  let update_input t current_input =
-    { t with current_input }
+  let poll_response t (resp : P.Poll_response.t Or_error.t) =
+    let t = { t with poll_in_flight = false } in
+    match resp with
+    | Error err -> { t with last_error = Some err }
+    | Ok { responses; kicked } ->
+      let t = 
+        List.fold responses ~init:t ~f:(fun t response ->
+          add_response t response)
+      in
+      { t with kicked }
 
   let create nonce =
     { interactions = Map.empty (module Int)
     ; current_input = ""
     ; nonce
+    ; last_error = None
+    ; kicked = false
+    ; poll_in_flight = false
     }
 end
 
 module Action = struct
   type t =
     | Submit_input
-    | Add_response of string
+    | Poll_response of P.Poll_response.t Or_error.t
     | Update_input of string
     | Poll
   [@@deriving sexp, variants]
 end
 
-let apply_action action model =
-  match (action:Action.t) with
-  | Submit_input      -> Model.submit_input model
-  | Add_response text -> Model.add_response model text
-  | Update_input text -> Model.update_input model text
-  | Poll -> assert false
+open Async_kernel
 
-let update_visibility m = m
+let poll (model:Model.t) ~(schedule:Action.t -> unit) =
+  let nonce = model.nonce in
+  if not model.poll_in_flight then (
+    don't_wait_for (
+      let%map response = Rpc_client.request P.poll { nonce } in
+      schedule (Poll_response response));
+    { model with poll_in_flight = true })
+  else
+    model
+;;
+
+let apply_action 
+      (action:Action.t)
+      (model:Model.t)
+      ~(schedule:Action.t -> unit)
+  =
+  if model.kicked then model
+  else match action with
+    | Submit_input       -> Model.submit_input model
+    | Poll_response resp -> Model.poll_response model resp
+    | Update_input text  -> Model.update_input model text
+    | Poll               -> poll model ~schedule
 
 open Async_kernel
 
-let poll ~schedule =
+let on_startup ~(schedule : Action.t -> unit) =
+  log_s [%message "Starting up polling loop"];
   let rec loop () =
-    schedule Action.Poll;
+    schedule Poll;
     upon (Async_js.sleep 0.5) (fun () -> loop ())
   in
   loop ()
 
-let on_startup ~schedule =
-  poll ~schedule
-
 let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   let open Vdom in
   let input =
-    Node.input
+    [Node.input
       [ Attr.type_ "text"
       ; Attr.string_property "value" m.current_input
       ; Attr.on_input (fun _ev text -> inject (Update_input text))
       ; Attr.create "size" "80"
-      ] []
+      ] []]
   in
   let entries =
     let interactions =
@@ -92,12 +126,23 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
       |> List.bind ~f:(function
         | Input {text;posted} ->
           [ Node.text text
-          ; Node.text (if posted then "..." else ":")
+          ; Node.text (if posted then ":" else "...")
           ; Node.create "br" [] []]
         | Response text ->
           [ Node.create "em" [] [Node.text text]
           ; Node.create "br" [] [] ])
     in
-    Node.div [] interactions
+    [Node.div [] interactions]
   in
-  Node.div [ ] [ entries ; input ]
+  let kicked =
+    if m.kicked then
+      [ Node.create "br" [] []
+      ; Node.text "You have been kicked!" ]
+    else []
+  in
+  Node.div [ ] 
+    (List.concat
+       [ entries
+       ; input
+       ; kicked
+       ])

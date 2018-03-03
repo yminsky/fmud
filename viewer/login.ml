@@ -27,10 +27,11 @@ module Model = struct
 end
 
 module Action = struct
-  type t = 
+  type t =
     | Update_nick of string
     | Update_password of string
     | Report_error of Model.error
+    | Login
     | Register
   [@@deriving sexp]
 end
@@ -47,7 +48,7 @@ include struct
     else Ok (Nick.of_string nick,Password.of_string password)
     
 
-  let submit_input (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
+  let login (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
     begin match valid_nick_and_password model with
     | Error reason -> schedule (Report_error (String reason))
     | Ok (nick,password) -> 
@@ -58,7 +59,7 @@ include struct
         | Ok Wrong_password -> 
           schedule (Report_error (String "Wrong password. Try again!"))
         | Ok Unknown_nick ->
-          let msg = "Unknown nick. Update the code to register this nick!" in
+          let msg = "Unknown nick. Maybe you want to register instead?" in
           schedule (Report_error (String msg))
         | Ok Login_accepted { nonce } ->
           report_nonce nonce
@@ -88,6 +89,7 @@ include struct
     | Update_password password -> { model with password }
     | Report_error error -> { Model.empty with errors = error :: model.errors }
     | Register -> register model  ~schedule ~report_nonce
+    | Login -> login model ~schedule ~report_nonce
 
 end
 
@@ -107,9 +109,13 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   in
   let inputs =
     List.concat
-      [ input "password" ~current:password (fun x -> Update_password x)
+      [ input "nickname" ~current:nick (fun x -> Update_nick x)
       ; [Node.create "br" [] []]
-      ; input "nickname" ~current:nick (fun x -> Update_nick x)
+      ; input "password" ~current:password (fun x -> Update_password x)
+      ; [Node.create "br" [] []]
+      ; [Node.button
+           [Attr.on_click (fun _ -> inject Action.Login)]
+           [Node.text "Log in"]]
       ; [Node.button
            [Attr.on_click (fun _ -> inject Action.Register)]
            [Node.text "Register"]]

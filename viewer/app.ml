@@ -29,31 +29,35 @@ module State = struct
   let schedule_as t inj action = t.schedule (inj action)
 end
 
+let login_apply_action model state action =
+  Model.Login (
+    Login.apply_action action model
+      ~schedule:(State.schedule_as state Action.login)
+      ~report_nonce:(State.schedule_as state Action.report_nonce))
+
+let main_page_apply_action model state action =
+  Model.Main_page (
+    Main_page.apply_action action model
+      ~schedule:(State.schedule_as state Action.main_page))
+
 let submit_input (model:Model.t) (state:State.t) =
   match model with
-  | Login m -> 
-    Model.Login (
-      Login.submit_input m
-        ~schedule:(State.schedule_as state Action.login)
-        ~report_nonce:(State.schedule_as state Action.report_nonce))
-  | Main_page m ->
-    Model.Main_page (Main_page.apply_action Submit_input m)
+  | Login m     -> login_apply_action     m state Login
+  | Main_page m -> main_page_apply_action m state Submit_input
 
 let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
   match action with
   | Submit_input -> submit_input model state
   | Login action ->
     (match model with
-     | Login model -> Login (
-       Login.apply_action action model 
-         ~schedule:(State.schedule_as state Action.login)
-         ~report_nonce:(State.schedule_as state Action.report_nonce))
+     | Login model -> login_apply_action model state action
      | _ -> model)
   | Main_page action ->
     (match model with
-     | Main_page model -> Main_page (Main_page.apply_action action model)
+     | Main_page model -> main_page_apply_action model state action
      | _ -> model)
   | Report_nonce nonce ->
+    Main_page.on_startup ~schedule:(State.schedule_as state Action.main_page);
     Main_page (Main_page.Model.create nonce)
 
 let on_startup ~schedule (_ : Model.t) =
