@@ -3,10 +3,6 @@ open! Base
 module Nick : Identifiable.S = String
 module Password : Identifiable.S = String
 
-module Check_nick = struct
-  type t = { nick : Nick.t } [@@deriving sexp]
-end
-
 module Nonce : sig
   type t
   include Identifiable.S with type t := t
@@ -16,13 +12,6 @@ end = struct
     Random.State.int32 rstate Int32.max_value
   include Int32
 end
-
-module Nick_status = struct
-  type t = Known_nick | New_nick [@@deriving sexp]
-end
-
-let check_nick =
-  Rpc.create "check-nick" (module Check_nick) (module Nick_status)
 
 module Login = struct
   type t =

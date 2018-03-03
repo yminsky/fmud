@@ -53,14 +53,6 @@ let impl rpc f =
        state_ref := state;
        response))
 
-(** An RPC that leaves the state unchanged. *)
-let impl' rpc f =
-  impl rpc (fun state input -> (state, f state input))
-
-let check_nick () =
-  impl' P.check_nick (fun state {nick} ->
-    if Map.mem state.players nick then Known_nick else New_nick)
-
 let login () =
   impl P.login (fun state { nick; password } ->
     match Map.find state.players nick with
@@ -169,7 +161,6 @@ let poll () =
 let rpc_decoder state_ref =
   [ input ()
   ; login ()
-  ; check_nick ()
   ; heartbeat ()
   ; poll ()
   ; register ()

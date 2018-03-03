@@ -5,7 +5,7 @@ module Model = struct
   type t =
     | Login of Login.Model.t
     | Main_page of Main_page.Model.t
-  [@@deriving sexp, compare]
+  [@@deriving compare]
                  
   let empty = Login Login.Model.empty
   let cutoff t1 t2 =

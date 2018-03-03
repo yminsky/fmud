@@ -1,6 +1,6 @@
 open! Base
 open! Stdio
-module Time = Core_kernel.Time
+module Time_ns = Core_kernel.Time_ns
 open! Import
 let log_s = Async_js.log_s
 
@@ -16,10 +16,20 @@ module Model = struct
     { interactions : Interaction.t Map.M(Int).t
     ; current_input : string
     ; nonce : Nonce.t
-    ; last_error : Error.t option
+    ; last_error : (Time_ns.t * Error.t) option
     ; kicked : bool
-    ; poll_in_flight : bool
-    } [@@deriving sexp, fields, compare]
+    ; in_flight : bool
+    } [@@deriving fields, compare]
+
+  let can_send t =
+    not t.in_flight
+    && (match t.last_error with
+      | None -> true
+      | Some (last_error_time,_) ->
+        let now = Incr.now () in
+        Time_ns.Span.(>)
+          (Time_ns.diff now last_error_time)
+          (Time_ns.Span.of_sec 2.))
 
   let next_interaction t =
     match Map.max_elt t.interactions with
@@ -46,9 +56,9 @@ module Model = struct
     { t with interactions }
 
   let poll_response t (resp : P.Poll_response.t Or_error.t) =
-    let t = { t with poll_in_flight = false } in
+    let t = { t with in_flight = false } in
     match resp with
-    | Error err -> { t with last_error = Some err }
+    | Error err -> { t with last_error = Some (Incr.now (), err) }
     | Ok { responses; kicked } ->
       let t = 
         List.fold responses ~init:t ~f:(fun t response ->
@@ -56,13 +66,25 @@ module Model = struct
       in
       { t with kicked }
 
+  let input_response t resp =
+    let t = { t with in_flight = false } in
+    match resp with
+    | Error err -> { t with last_error = Some (Incr.now (), err) }
+    | Ok id ->
+      { t with 
+        interactions = 
+          Map.change t.interactions id ~f:(function
+            | Some (Input { text; _ }) ->
+              Some (Input { text; posted = true })
+            | x -> x) }
+
   let create nonce =
     { interactions = Map.empty (module Int)
     ; current_input = ""
     ; nonce
     ; last_error = None
     ; kicked = false
-    ; poll_in_flight = false
+    ; in_flight = false
     }
 end
 
@@ -70,6 +92,7 @@ module Action = struct
   type t =
     | Submit_input
     | Poll_response of P.Poll_response.t Or_error.t
+    | Input_response of int Or_error.t
     | Update_input of string
     | Poll
   [@@deriving sexp, variants]
@@ -79,14 +102,34 @@ open Async_kernel
 
 let poll (model:Model.t) ~(schedule:Action.t -> unit) =
   let nonce = model.nonce in
-  if not model.poll_in_flight then (
+  if not (Model.can_send model) then model
+  else (
     don't_wait_for (
       let%map response = Rpc_client.request P.poll { nonce } in
       schedule (Poll_response response));
-    { model with poll_in_flight = true })
+    { model with in_flight = true })
+
+let maybe_send_input (model:Model.t) ~(schedule:Action.t -> unit) =
+  if not (Model.can_send model) then model
   else
-    model
-;;
+    let to_send =
+      Map.to_alist model.interactions
+      |> List.find_map ~f:(fun (id,interaction) ->
+        match interaction with
+        | Response _ -> None
+        | Input { text; posted } ->
+          if posted then None
+          else Some (id,text))
+    in
+    match to_send with
+    | None -> model
+    | Some (id,input) ->
+      let nonce = model.nonce in
+      don't_wait_for (
+        let%map response = Rpc_client.request P.input { nonce; input } in        
+        schedule (Input_response (Or_error.map response ~f:(fun () -> id))));
+      { model with in_flight = true }
+
 
 let apply_action 
       (action:Action.t)
@@ -94,11 +137,16 @@ let apply_action
       ~(schedule:Action.t -> unit)
   =
   if model.kicked then model
-  else match action with
-    | Submit_input       -> Model.submit_input model
-    | Poll_response resp -> Model.poll_response model resp
-    | Update_input text  -> Model.update_input model text
-    | Poll               -> poll model ~schedule
+  else (
+    let model = 
+      match action with
+      | Submit_input        -> Model.submit_input model
+      | Poll_response resp  -> Model.poll_response model resp
+      | Input_response resp -> Model.input_response model resp
+      | Update_input text   -> Model.update_input model text
+      | Poll                -> poll model ~schedule
+    in
+    maybe_send_input model ~schedule)
 
 open Async_kernel
 
