@@ -52,7 +52,7 @@ module Action = struct
     | Add_response of string
     | Update_input of string
     | Poll
-  [@@deriving sexp]
+  [@@deriving sexp, variants]
 end
 
 let apply_action action model =
@@ -65,9 +65,6 @@ let apply_action action model =
 let update_visibility m = m
 
 open Async_kernel
-
-let login nick password =
-  Rpc_client.request P.login { nick; password }
 
 let poll ~schedule =
   let rec loop () =

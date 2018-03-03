@@ -31,30 +31,28 @@ module Action = struct
     | Update_nick of string
     | Update_password of string
     | Report_error of Model.error
+    | Register
   [@@deriving sexp]
 end
 
 include struct
   open Async_kernel 
 
-  let apply_action (action:Action.t) (model : Model.t) _state =
-    match action with
-    | Update_nick nick -> { model with nick }
-    | Update_password password -> { model with password }
-    | Report_error error -> { Model.empty with errors = error :: model.errors }
-
-  let submit_input (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
+  let valid_nick_and_password (model:Model.t) =
     let nick     = String.strip model.nick     in
     let password = String.strip model.password in
-    if String.is_empty model.nick
-    || String.is_empty model.password then
-      schedule (Report_error (String "Password and nickname must both be non-empty"))
-    else 
-      don't_wait_for begin match%map
-          Rpc_client.request P.login
-            { nick     = Nick.of_string nick
-            ; password = Password.of_string password }
-        with
+    if String.is_empty nick
+    || String.is_empty password 
+    then Error "Password and nickname must both be non-empty"
+    else Ok (Nick.of_string nick,Password.of_string password)
+    
+
+  let submit_input (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
+    begin match valid_nick_and_password model with
+    | Error reason -> schedule (Report_error (String reason))
+    | Ok (nick,password) -> 
+      don't_wait_for begin 
+        match%map Rpc_client.request P.login { nick ; password } with
         | Error error -> 
           schedule (Report_error (Ordinary error))
         | Ok Wrong_password -> 
@@ -65,7 +63,32 @@ include struct
         | Ok Login_accepted { nonce } ->
           report_nonce nonce
       end;
+    end;
     { model with status = Logging_in }
+
+  let register (model : Model.t) ~(schedule: Action.t -> unit) ~report_nonce =
+    begin match valid_nick_and_password model with
+    | Error reason -> schedule (Report_error (String reason))
+    | Ok (nick,password) ->
+      don't_wait_for begin
+        match%map Rpc_client.request P.register { nick; password } with
+        | Error error ->
+          schedule (Report_error (Ordinary error))
+        | Ok Nick_taken ->
+          schedule (Report_error (String "That nickname was taken. Try another!"))
+        | Ok Registered { nonce } ->
+          report_nonce nonce
+      end;
+    end;
+    { model with status = Logging_in }
+
+  let apply_action (action:Action.t) (model : Model.t) ~schedule ~report_nonce =
+    match action with
+    | Update_nick nick -> { model with nick }
+    | Update_password password -> { model with password }
+    | Report_error error -> { Model.empty with errors = error :: model.errors }
+    | Register -> register model  ~schedule ~report_nonce
+
 end
 
 open Vdom
@@ -86,7 +109,11 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
     List.concat
       [ input "password" ~current:password (fun x -> Update_password x)
       ; [Node.create "br" [] []]
-      ; input "nickname" ~current:nick (fun x -> Update_nick x) ]
+      ; input "nickname" ~current:nick (fun x -> Update_nick x)
+      ; [Node.button
+           [Attr.on_click (fun _ -> inject Action.Register)]
+           [Node.text "Register"]]
+      ]
   in
   let errors =
     List.bind (List.rev errors) ~f:(fun error ->

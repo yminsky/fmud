@@ -18,13 +18,15 @@ module Action = struct
     | Report_nonce of Nonce.t
     | Main_page of Main_page.Action.t
     | Login of Login.Action.t
-  [@@deriving sexp]
+  [@@deriving sexp, variants]
   
   let should_log (_:t) = true
 end
 
 module State = struct
   type t = { schedule : Action.t -> unit }
+
+  let schedule_as t inj action = t.schedule (inj action)
 end
 
 let submit_input (model:Model.t) (state:State.t) =
@@ -32,21 +34,24 @@ let submit_input (model:Model.t) (state:State.t) =
   | Login m -> 
     Model.Login (
       Login.submit_input m
-        ~schedule:(fun action -> state.schedule (Login action))
-        ~report_nonce:(fun nonce -> state.schedule (Report_nonce nonce)))
+        ~schedule:(State.schedule_as state Action.login)
+        ~report_nonce:(State.schedule_as state Action.report_nonce))
   | Main_page m ->
     Model.Main_page (Main_page.apply_action Submit_input m)
 
 let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
   match action with
   | Submit_input -> submit_input model state
+  | Login action ->
+    (match model with
+     | Login model -> Login (
+       Login.apply_action action model 
+         ~schedule:(State.schedule_as state Action.login)
+         ~report_nonce:(State.schedule_as state Action.report_nonce))
+     | _ -> model)
   | Main_page action ->
     (match model with
      | Main_page model -> Main_page (Main_page.apply_action action model)
-     | _ -> model)
-  | Login action ->
-    (match model with
-     | Login model -> Login (Login.apply_action action model state)
      | _ -> model)
   | Report_nonce nonce ->
     Main_page (Main_page.Model.create nonce)

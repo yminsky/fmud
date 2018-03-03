@@ -41,6 +41,15 @@ end
 let login =
   Rpc.create "login" (module Login) (module Login_response)
 
+module Registration_response = struct
+  type t = | Registered of { nonce : Nonce.t }
+           | Nick_taken
+  [@@deriving sexp]
+end
+
+let register =
+  Rpc.create "register" (module Login) (module Registration_response)
+
 module Input = struct
   type t =
     { nonce: Nonce.t

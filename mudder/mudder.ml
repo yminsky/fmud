@@ -75,6 +75,21 @@ let login () =
         (state, Login_accepted { nonce })
   )
 
+let register () =
+  impl P.register (fun state { nick; password } ->
+    match Map.find state.players nick with
+    | Some _ ->
+      (state, Nick_taken)
+    | None ->
+      let nonce = Nonce.random state.rstate in
+      let players = 
+        Map.set state.players ~key:nick
+          ~data:{ nick; password; pending = Fqueue.empty
+                ; nonce = Some nonce; last_heartbeat = Time.now () }
+      in
+      ({ state with players },
+       Registered { nonce }))
+
 (** apply_action adds the action to the appropriate player's
     pending action queue. If no player is found, the action is
     ignored. *)
@@ -157,6 +172,7 @@ let rpc_decoder state_ref =
   ; check_nick ()
   ; heartbeat ()
   ; poll ()
+  ; register ()
   ]
   |> List.map ~f:(fun f -> f state_ref)
   |> Rpc.Decoder.create
