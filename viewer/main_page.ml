@@ -161,12 +161,16 @@ let on_startup ~(schedule : Action.t -> unit) =
 let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   let open Vdom in
   let input =
-    [Node.input
-      [ Attr.type_ "text"
-      ; Attr.string_property "value" m.current_input
-      ; Attr.on_input (fun _ev text -> inject (Update_input text))
-      ; Attr.create "size" "80"
-      ] []]
+    if m.kicked then
+      [ Node.create "br" [] []
+      ; Node.text "You have been kicked! Try reloading the page to log in again." ]
+    else
+      [Node.input
+         [ Attr.type_ "text"
+         ; Attr.string_property "value" m.current_input
+         ; Attr.on_input (fun _ev text -> inject (Update_input text))
+         ; Attr.create "size" "80"
+         ] []]
   in
   let entries =
     let interactions =
@@ -177,20 +181,13 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
           ; Node.text (if posted then ":" else "...")
           ; Node.create "br" [] []]
         | Response text ->
-          [ Node.create "em" [] [Node.text text]
+          [ Node.create "pre" [] [Node.text text]
           ; Node.create "br" [] [] ])
     in
     [Node.div [] interactions]
-  in
-  let kicked =
-    if m.kicked then
-      [ Node.create "br" [] []
-      ; Node.text "You have been kicked!" ]
-    else []
   in
   Node.div [ ] 
     (List.concat
        [ entries
        ; input
-       ; kicked
        ])

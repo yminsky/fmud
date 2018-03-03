@@ -42,6 +42,11 @@ module State = struct
     ; handlers       : 'world Handlers.t
     ; rstate         : Random.State.t
     } [@@deriving fields]
+
+  let set_player t (player:Player.t) =
+    { t with 
+      players = Map.set t.players ~key:player.nick ~data:player }
+    
 end
 
 (** An RPC that can update the state *)
@@ -52,35 +57,6 @@ let impl rpc f =
        let (state,response) = f state input in
        state_ref := state;
        response))
-
-let login () =
-  impl P.login (fun state { nick; password } ->
-    match Map.find state.players nick with
-    | None -> (state, Unknown_nick)
-    | Some player ->
-      if Password.(<>) player.password password then (state, Wrong_password)
-      else
-        let nonce = Nonce.random state.rstate in
-        let player = { player with nonce = Some nonce } in
-        let players = Map.set state.players ~key:nick ~data:player in
-        let state = { state with players } in
-        (state, Login_accepted { nonce })
-  )
-
-let register () =
-  impl P.register (fun state { nick; password } ->
-    match Map.find state.players nick with
-    | Some _ ->
-      (state, Nick_taken)
-    | None ->
-      let nonce = Nonce.random state.rstate in
-      let players = 
-        Map.set state.players ~key:nick
-          ~data:{ nick; password; pending = Fqueue.empty
-                ; nonce = Some nonce; last_heartbeat = Time.now () }
-      in
-      ({ state with players },
-       Registered { nonce }))
 
 (** apply_action adds the action to the appropriate player's
     pending action queue. If no player is found, the action is
@@ -100,6 +76,39 @@ let apply_action (state: _ State.t) (action:action) =
   in
   { state with players }
 
+let apply_actions state actions = List.fold actions ~init:state ~f:apply_action
+
+let login () =
+  impl P.login (fun state { nick; password } ->
+    match Map.find state.players nick with
+    | None -> (state, Unknown_nick)
+    | Some player ->
+      if Password.(<>) player.password password then (state, Wrong_password)
+      else
+        let nonce = Nonce.random state.rstate in
+        let state = State.set_player state { player with nonce = Some nonce } in
+        let (world, actions) = 
+          state.handlers.nick_added state.world (Nick.to_string nick)
+        in
+        let state = apply_actions { state with world } actions in
+        (state, Login_accepted { nonce })
+  )
+
+let register () =
+  impl P.register (fun state { nick; password } ->
+    match Map.find state.players nick with
+    | Some _ ->
+      (state, Nick_taken)
+    | None ->
+      let nonce = Nonce.random state.rstate in
+      let players = 
+        Map.set state.players ~key:nick
+          ~data:{ nick; password; pending = Fqueue.empty
+                ; nonce = Some nonce; last_heartbeat = Time.now () }
+      in
+      ({ state with players },
+       Registered { nonce }))
+
 let unknown_nonce nonce =
   raise_s [%message "Unknown nonce" (nonce:Nonce.t)]
 
@@ -116,10 +125,10 @@ let find_nonce_exn (state:_ State.t) nonce =
 let input () =
   impl P.input (fun state { nonce; input } ->
     let (_,player) = find_nonce_exn state nonce in
-    let (world,actions) =
+    let (world, actions) =
       state.handlers.handle_line state.world (Nick.to_string player.nick) input
     in
-    let state = List.fold actions ~init:{ state with world } ~f:apply_action in
+    let state = apply_actions { state with world } actions in
     (state, ())
   )
 
@@ -138,11 +147,8 @@ let heartbeat () =
 
 let poll () =
   impl P.poll (fun state { nonce } ->
-    let (nick,player) = find_nonce_exn state nonce in
+    let (_,player) = find_nonce_exn state nonce in
     let pending = player.pending in
-    let player = { player with pending = Fqueue.empty } in
-    let players = Map.set state.players ~key:nick ~data:player in
-    let state = { state with players } in
     let result =
       Fqueue.to_list pending
       |> List.fold_until ~init:[] ~f:(fun messages action ->
@@ -154,6 +160,17 @@ let poll () =
       match result with
       | Finished messages      -> (messages, false)
       | Stopped_early messages -> (messages, true)
+    in
+    let player = { player with pending = Fqueue.empty } in
+    let state = State.set_player state player in
+    let state =
+      if not kicked then state
+      else 
+        let (world, actions) =
+          state.handlers.nick_removed state.world (Nick.to_string player.nick)
+        in
+        let state = apply_actions { state with world } actions in
+        State.set_player state { player with nonce = None }
     in
     (state, { responses; kicked })
   )
