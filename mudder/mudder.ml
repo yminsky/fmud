@@ -84,6 +84,8 @@ let login () =
     | None -> (state, Unknown_nick)
     | Some player ->
       if Password.(<>) player.password password then (state, Wrong_password)
+      else if Option.is_some player.nonce then
+        (state, Already_logged_in)
       else
         let nonce = Nonce.random state.rstate in
         let state = State.set_player state { player with nonce = Some nonce } in
@@ -101,13 +103,16 @@ let register () =
       (state, Nick_taken)
     | None ->
       let nonce = Nonce.random state.rstate in
-      let players = 
-        Map.set state.players ~key:nick
-          ~data:{ nick; password; pending = Fqueue.empty
-                ; nonce = Some nonce; last_heartbeat = Time.now () }
+      let state = 
+        State.set_player state
+          { nick; password; pending = Fqueue.empty
+          ; nonce = Some nonce; last_heartbeat = Time.now () }
       in
-      ({ state with players },
-       Registered { nonce }))
+      let (world, actions) = 
+        state.handlers.nick_added state.world (Nick.to_string nick)
+      in
+      let state = apply_actions { state with world } actions in
+      (state,Registered { nonce }))
 
 let unknown_nonce nonce =
   raise_s [%message "Unknown nonce" (nonce:Nonce.t)]

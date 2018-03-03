@@ -24,6 +24,7 @@ module Login_response = struct
   type t = | Login_accepted of { nonce : Nonce.t }
            | Wrong_password
            | Unknown_nick
+           | Already_logged_in
   [@@deriving sexp]
 end
 
