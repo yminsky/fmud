@@ -16,13 +16,23 @@ type action =
 [@@deriving sexp]
 
 module Player = struct
+  type activity = 
+    | Inactive
+    | Active of { pending: action Fqueue.t;  nonce: Nonce.t }
+  [@@deriving sexp]
+
   type t =
     { nick : Nick.t
     ; password : Password.t
-    ; pending : action Fqueue.t
-    ; nonce : Nonce.t option
-    ; last_poll : Time_ns.t
+    ; activity : activity
+    ; last_poll : Time_ns.t sexp_opaque
     }
+    [@@deriving sexp]
+
+    let active t =
+      match t.activity with
+      | Inactive -> false
+      | Active _ -> true
 end
 
 module Handlers = struct
@@ -47,16 +57,12 @@ module State = struct
     { t with 
       players = Map.set t.players ~key:player.nick ~data:player }
     
+  let active_nicks t =
+    Map.filter t.players ~f:(fun player ->
+      match player.activity with Inactive -> false | Active _ -> true)
+    |> Map.keys
+    |> Set.of_list (module Nick)
 end
-
-(** An RPC that can update the state *)
-let impl rpc f =
-  (fun (state_ref : _ State.t ref) ->
-     Rpc.Implementation.create rpc (fun input ->
-       let state = !state_ref in
-       let (state,response) = f state input in
-       state_ref := state;
-       response))
 
 (** apply_action adds the action to the appropriate player's
     pending action queue. If no player is found, the action is
@@ -72,11 +78,43 @@ let apply_action (state: _ State.t) (action:action) =
     Map.change state.players nick ~f:(function
       | None -> None
       | Some player ->
-        Some { player with pending = Fqueue.enqueue player.pending action })
+        match player.activity with
+        | Inactive -> Some player
+        | Active { pending; nonce } ->
+          let pending = Fqueue.enqueue pending action in
+          Some { player with activity = Active { nonce ; pending }})
   in
   { state with players }
 
 let apply_actions state actions = List.fold actions ~init:state ~f:apply_action
+
+(** Update the state according to the provided function [f], handling
+   resulting addition and removal of nicks *)
+let update_state state_ref f =
+  let state = !state_ref in
+  let (state,rval,added,removed) =
+    let (state',rval) = f state in
+    let old_nicks = State.active_nicks state in
+    let new_nicks = State.active_nicks state' in
+    let added   = Set.diff new_nicks old_nicks in
+    let removed = Set.diff old_nicks new_nicks in
+    (state', rval, added, removed)
+  in
+  let apply_changes (state:_ State.t) nicks update_world =
+    Set.fold ~init:state nicks ~f:(fun state nick ->
+      let (world,actions) = update_world state.world (Nick.to_string nick) in
+      apply_actions { state with world } actions)
+  in
+  let state = apply_changes state removed state.handlers.nick_removed in
+  let state = apply_changes state added   state.handlers.nick_added   in
+  state_ref := state;
+  rval
+
+(** An RPC that can update the state *)
+let impl rpc f =
+  (fun (state_ref : _ State.t ref) ->
+     Rpc.Implementation.create rpc (fun input ->
+       update_state state_ref (fun state -> f state input)))
 
 let login () =
   impl P.login (fun state { nick; password } ->
@@ -84,15 +122,14 @@ let login () =
     | None -> (state, Unknown_nick)
     | Some player ->
       if Password.(<>) player.password password then (state, Wrong_password)
-      else if Option.is_some player.nonce then
+      else if Player.active player then
         (state, Already_logged_in)
       else
         let nonce = Nonce.random state.rstate in
-        let state = State.set_player state { player with nonce = Some nonce } in
-        let (world, actions) = 
-          state.handlers.nick_added state.world (Nick.to_string nick)
+        let state = 
+          State.set_player state
+            { player with activity = Active { nonce; pending = Fqueue.empty }}
         in
-        let state = apply_actions { state with world } actions in
         (state, Login_accepted { nonce })
   )
 
@@ -105,13 +142,10 @@ let register () =
       let nonce = Nonce.random state.rstate in
       let state = 
         State.set_player state
-          { nick; password; pending = Fqueue.empty
-          ; nonce = Some nonce; last_poll = Time_ns.now () }
+          { nick; password
+          ; activity = Active { pending = Fqueue.empty; nonce }
+          ; last_poll = Time_ns.now () }
       in
-      let (world, actions) = 
-        state.handlers.nick_added state.world (Nick.to_string nick)
-      in
-      let state = apply_actions { state with world } actions in
       (state,Registered { nonce }))
 
 let unknown_nonce nonce =
@@ -121,7 +155,9 @@ let find_nonce_exn (state:_ State.t) nonce =
   let player =
     Map.to_sequence state.players
     |> Sequence.find ~f:(fun (_,player) ->
-      Option.equal Nonce.equal player.nonce (Some nonce))
+      match player.activity with
+      | Inactive -> false
+      | Active {nonce = nonce'; _ } -> Nonce.equal nonce' nonce)
   in
   match player with
   | Some x -> x
@@ -140,7 +176,11 @@ let input () =
 let poll () =
   impl P.poll (fun state { nonce } ->
     let (_,player) = find_nonce_exn state nonce in
-    let pending = player.pending in
+    let pending =
+      match player.activity with
+      | Inactive -> Fqueue.empty
+      | Active active -> active.pending
+    in
     let result =
       Fqueue.to_list pending
       |> List.fold_until ~init:[] ~f:(fun messages action ->
@@ -153,16 +193,14 @@ let poll () =
       | Finished messages      -> (messages, false)
       | Stopped_early messages -> (messages, true)
     in
-    let player = { player with pending = Fqueue.empty; last_poll = Time_ns.now () } in
+    let player = 
+      { player with activity = Active { pending = Fqueue.empty; nonce }
+                  ; last_poll = Time_ns.now () }
+    in
     let state = State.set_player state player in
     let state =
       if not kicked then state
-      else 
-        let (world, actions) =
-          state.handlers.nick_removed state.world (Nick.to_string player.nick)
-        in
-        let state = apply_actions { state with world } actions in
-        State.set_player state { player with nonce = None }
+      else State.set_player state { player with activity = Inactive }
     in
     (state, { responses; kicked })
   )
@@ -176,6 +214,30 @@ let rpc_decoder state_ref =
   |> List.map ~f:(fun f -> f state_ref)
   |> Rpc.Decoder.create
 
+let expire_old_players (state:_ State.t) =
+  let now = Time_ns.now () in
+  let to_expire =
+    Map.data state.players
+    |> List.filter_map ~f:(fun player ->
+      let should_expire =
+        Player.active player
+        && Time_ns.Span.(>)
+             (Time_ns.diff now player.last_poll) 
+             (Time_ns.Span.of_sec 10.)
+      in
+      if should_expire then Some player else None)
+  in
+  let state =
+    List.fold to_expire ~init:state ~f:(fun state player ->
+      print_s [%message "Kicking player" (player : Player.t)];
+      let (world,actions) =
+        state.handlers.nick_removed state.world (Nick.to_string player.nick)
+      in
+      let state = apply_actions { state with world } actions in
+      State.set_player state { player with activity = Inactive })
+  in
+  state
+
 let main (handlers : _ Handlers.t) ~port =
   let state_ref =
     ref { State.
@@ -186,6 +248,10 @@ let main (handlers : _ Handlers.t) ~port =
         }
   in
   let decoder = rpc_decoder state_ref in
+  let () =
+    every (Time.Span.of_sec 1.0) (fun () ->
+      state_ref := expire_old_players !state_ref)
+  in
   let%bind (_:_ Server.t) =
     Server.create
       ~on_handler_error:`Raise

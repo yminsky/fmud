@@ -48,10 +48,22 @@ module Model = struct
     { t with current_input }
 
   let add_response t response =
+    let previous_response = 
+      Option.bind (Map.max_elt t.interactions) ~f:(fun (max_i,max_interaction) ->
+        match max_interaction with
+        | Input _ -> None
+        | Response previous -> Some (max_i,previous))
+    in
     let interactions =
-      Map.set t.interactions
-        ~key:(next_interaction t)
-        ~data:(Response response)
+      match previous_response with
+      | None ->
+        Map.set t.interactions
+          ~key:(next_interaction t)
+          ~data:(Response response)
+      | Some (max_i,max_response) ->
+        Map.set t.interactions
+          ~key:max_i
+          ~data:(Response (max_response ^ "\n" ^ response))
     in
     { t with interactions }
 
