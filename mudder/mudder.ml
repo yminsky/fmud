@@ -97,13 +97,13 @@ let apply_actions state actions =
    resulting addition and removal of nicks *)
 let update_state (type world) ~context state_ref f =
   let state : world State.t = !state_ref in
-  let (old_state,state,rval,added,removed) =
+  let (state,rval,added,removed) =
     let (state',rval) = f state in
     let old_nicks = State.active_nicks state in
     let new_nicks = State.active_nicks state' in
     let added   = Set.diff new_nicks old_nicks in
     let removed = Set.diff old_nicks new_nicks in
-    (state,state', rval, added, removed)
+    (state', rval, added, removed)
   in
   let apply_changes (state:_ State.t) nicks update_world =
     Set.fold ~init:state nicks ~f:(fun state nick ->
@@ -112,14 +112,16 @@ let update_state (type world) ~context state_ref f =
   in
   let state = apply_changes state removed state.handlers.nick_removed in
   let state = apply_changes state added   state.handlers.nick_added   in
-  let sexp_of_world = state.handlers.sexp_of_world in
-  print_s [%message
-    "Update state" 
-      (context:Sexp.t)
-      (added : Set.M(Nick).t)
-      (removed : Set.M(Nick).t)
-      (old_state : world State.t) 
-      (state : world State.t)];
+  begin
+    let none_if_empty s = if Set.is_empty s then None else Some s in
+    let added = none_if_empty added in
+    let removed = none_if_empty removed in
+    print_s [%message
+      "Update state" 
+        (context:Sexp.t)
+        (added : Set.M(Nick).t sexp_option)
+        (removed : Set.M(Nick).t sexp_option)];
+  end;
   state_ref := state;
   rval
 
