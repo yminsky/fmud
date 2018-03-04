@@ -11,6 +11,8 @@ val create
   -> (module Sexpable.S with type t = 'b)
   -> ('a,'b) t
 
+val name : (_,_) t -> string
+
 (** Given an RPC and a query, returns the encoded query, and a function for
     decoding the response. *)
 val encode : ('a,'b) t -> 'a -> Sexp.t * (Sexp.t -> 'b Or_error.t)

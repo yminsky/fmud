@@ -70,7 +70,8 @@ module Model = struct
   let poll_response t (resp : P.Poll_response.t Or_error.t) =
     let t = { t with in_flight = false } in
     match resp with
-    | Error err -> { t with last_error = Some (Incr.now (), err) }
+    | Error err -> { t with last_error = Some (Incr.now (), err)
+                          ; kicked = true }
     | Ok { responses; kicked } ->
       let t = 
         List.fold responses ~init:t ~f:(fun t response ->
@@ -179,6 +180,7 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
     else
       [Node.input
          [ Attr.type_ "text"
+         ; Attr.id "keep-in-view"
          ; Attr.string_property "value" m.current_input
          ; Attr.on_input (fun _ev text -> inject (Update_input text))
          ; Attr.create "size" "80"
@@ -190,11 +192,11 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
       |> List.bind ~f:(function
         | Input {text;posted} ->
           [ Node.text text
-          ; Node.text (if posted then ":" else "...")
-          ; Node.create "br" [] []]
+          ; Node.text (if posted then "" else "...")
+          ; Node.create "br" [][]]
         | Response text ->
-          [ Node.create "pre" [] [Node.text text]
-          ; Node.create "br" [] [] ])
+          [ Node.create "pre" [] [Node.text text]]
+      )
     in
     [Node.div [] interactions]
   in

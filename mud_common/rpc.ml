@@ -6,6 +6,8 @@ type ('a,'b) t =
   ; response: (module Sexpable.S with type t = 'b)
   }
 
+let name t = t.name
+
 let create name request response =
   { name; request; response }
 

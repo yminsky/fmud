@@ -18,6 +18,7 @@ module Action = struct
     | Report_nonce of Nonce.t
     | Main_page of Main_page.Action.t
     | Login of Login.Action.t
+    | Scroll
   [@@deriving sexp, variants]
   
   let should_log (_:t) = true
@@ -27,6 +28,7 @@ module State = struct
   type t = { schedule : Action.t -> unit }
 
   let schedule_as t inj action = t.schedule (inj action)
+  let schedule t action = t.schedule action
 end
 
 let login_apply_action model state action =
@@ -59,11 +61,17 @@ let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
   | Report_nonce nonce ->
     Main_page.on_startup ~schedule:(State.schedule_as state Action.main_page);
     Main_page (Main_page.Model.create nonce)
+  | Scroll -> 
+    Js_misc.scroll ();
+    model
 
 let on_startup ~schedule (_ : Model.t) =
   Async_kernel.return { State. schedule }
     
-let on_display ~old:_ _ _ = ()
+let on_display ~old model state =
+  if not (Model.cutoff old model) then
+    State.schedule state Scroll
+  
 let update_visibility m = m
                             
 let key_handler ~(inject : Action.t -> Vdom.Event.t) =

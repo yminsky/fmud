@@ -13,6 +13,7 @@ type door =
   { direction : string
   ; destination : string
   }
+[@@deriving sexp]
 
 type item =
   { in_room : bool
@@ -20,24 +21,28 @@ type item =
   ; description : string
   ; name : string
   }
+[@@deriving sexp]
 
 type person =
   { nick : string
   ; roomn : string
   ; health : int
   }
+[@@deriving sexp]
 
 type room =
   { name: string
   ; doors: door list
   ; description: string
   }
+[@@deriving sexp]
 
 type world =
   { people: person list
   ; rooms: room list
   ; items: item list
   }
+[@@deriving sexp]
 
   (*
    | ████████ ███████ ██   ██ ████████
@@ -425,7 +430,6 @@ let hit w nick vic =
        [Send_message
           {nick; message =
                    "Sorry! " ^ vic ^ " isn't in this room!"}])
-;;
 
 let nick_added w nick =
   match List.find w.people ~f:(fun p -> p.nick = nick) with
@@ -443,7 +447,7 @@ let nick_added w nick =
     (nw,actions)
   | Some p ->
     let person = {p with health = 20 ; roomn = "Welcome"} in
-    let nw = { w with people = person :: w.people } in
+    let nw = { w with people = person :: other_people w nick } in
     let welcome_message =
       Send_message { nick; message = String.concat ["Welcome back to the MUD, "; nick; "!"] }
     in
@@ -486,7 +490,8 @@ let handle_line w nick line =
   | "/inventory" :: [] -> (w, [Send_message {nick; message = inventory w nick}])
   | "/whisper" :: to_nick :: message ->
     (w, [Send_message { nick = to_nick
-                      ; message = nick ^ " whispered: " ^ String.concat ~sep:" " message }])
+                      ; message = nick ^ " whispered: " 
+                                  ^ String.concat ~sep:" " message }])
   | _ ->
     (* just show what was said to everyone in the same room *)
     let hearers =
@@ -509,4 +514,5 @@ let () =
     ; handle_line
     ; nick_added
     ; nick_removed
+    ; sexp_of_world
     }

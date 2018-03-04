@@ -24,7 +24,6 @@ module Login_response = struct
   type t = | Login_accepted of { nonce : Nonce.t }
            | Wrong_password
            | Unknown_nick
-           | Already_logged_in
   [@@deriving sexp]
 end
 
@@ -56,8 +55,7 @@ end
 
 module Poll_response = struct
   type t = { responses : string list
-           ; kicked : bool
-           } [@@deriving sexp]
+           ; kicked : bool } [@@deriving sexp]
 end
 
 let poll = Rpc.create "poll" (module Poll) (module Poll_response)

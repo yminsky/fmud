@@ -58,8 +58,6 @@ include struct
           schedule (Report_error (Ordinary error))
         | Ok Wrong_password -> 
           schedule (Report_error (String "Wrong password. Try again!"))
-        | Ok Already_logged_in ->
-          schedule (Report_error (String "You appear to be logged in elsewhere"))
         | Ok Unknown_nick ->
           let msg = "Unknown nick. Maybe you want to register instead?" in
           schedule (Report_error (String msg))

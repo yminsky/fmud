@@ -2,6 +2,7 @@ open Core
 open Async
 module Hashtbl  = Base.Hashtbl
 module Map      = Base.Map
+module Set      = Base.Set
 
 module P        = Mud_common.Protocol
 module Rpc      = Mud_common.Rpc
@@ -38,10 +39,11 @@ end
 module Handlers = struct
   type 'world t =
     { init : 'world
-    ; description  : string
-    ; handle_line  : 'world -> string -> string -> 'world * action list
-    ; nick_added   : 'world -> string -> 'world * action list
-    ; nick_removed : 'world -> string -> 'world * action list
+    ; description   : string
+    ; handle_line   : 'world -> string -> string -> 'world * action list
+    ; nick_added    : 'world -> string -> 'world * action list
+    ; nick_removed  : 'world -> string -> 'world * action list
+    ; sexp_of_world : 'world -> Sexp.t
     }
 end
 
@@ -49,9 +51,9 @@ module State = struct
   type 'world t =
     { world          : 'world
     ; players        : Player.t Map.M(Nick).t
-    ; handlers       : 'world Handlers.t
-    ; rstate         : Random.State.t
-    } [@@deriving fields]
+    ; handlers       : 'world Handlers.t sexp_opaque
+    ; rstate         : Random.State.t sexp_opaque
+    } [@@deriving sexp, fields]
 
   let set_player t (player:Player.t) =
     { t with 
@@ -86,19 +88,22 @@ let apply_action (state: _ State.t) (action:action) =
   in
   { state with players }
 
-let apply_actions state actions = List.fold actions ~init:state ~f:apply_action
+let apply_actions state actions = 
+  List.iter actions ~f:(fun action ->
+    print_s [%message "Action" (action : action)]);
+  List.fold actions ~init:state ~f:apply_action
 
 (** Update the state according to the provided function [f], handling
    resulting addition and removal of nicks *)
-let update_state state_ref f =
-  let state = !state_ref in
-  let (state,rval,added,removed) =
+let update_state (type world) ~context state_ref f =
+  let state : world State.t = !state_ref in
+  let (old_state,state,rval,added,removed) =
     let (state',rval) = f state in
     let old_nicks = State.active_nicks state in
     let new_nicks = State.active_nicks state' in
     let added   = Set.diff new_nicks old_nicks in
     let removed = Set.diff old_nicks new_nicks in
-    (state', rval, added, removed)
+    (state,state', rval, added, removed)
   in
   let apply_changes (state:_ State.t) nicks update_world =
     Set.fold ~init:state nicks ~f:(fun state nick ->
@@ -107,6 +112,14 @@ let update_state state_ref f =
   in
   let state = apply_changes state removed state.handlers.nick_removed in
   let state = apply_changes state added   state.handlers.nick_added   in
+  let sexp_of_world = state.handlers.sexp_of_world in
+  print_s [%message
+    "Update state" 
+      (context:Sexp.t)
+      (added : Set.M(Nick).t)
+      (removed : Set.M(Nick).t)
+      (old_state : world State.t) 
+      (state : world State.t)];
   state_ref := state;
   rval
 
@@ -114,7 +127,9 @@ let update_state state_ref f =
 let impl rpc f =
   (fun (state_ref : _ State.t ref) ->
      Rpc.Implementation.create rpc (fun input ->
-       update_state state_ref (fun state -> f state input)))
+       update_state
+         ~context:[%message "RPC" ~_:(Rpc.name rpc : string)]
+         state_ref (fun state -> f state input)))
 
 let login () =
   impl P.login (fun state { nick; password } ->
@@ -122,9 +137,8 @@ let login () =
     | None -> (state, Unknown_nick)
     | Some player ->
       if Password.(<>) player.password password then (state, Wrong_password)
-      else if Player.active player then
-        (state, Already_logged_in)
-      else
+      else 
+        (* blindly overwrite any existing session. *)
         let nonce = Nonce.random state.rstate in
         let state = 
           State.set_player state
@@ -185,14 +199,19 @@ let poll () =
       Fqueue.to_list pending
       |> List.fold_until ~init:[] ~f:(fun messages action ->
         match action with
-        | Kick _                           -> Stop messages
-        | Send_message { nick=_; message } -> Continue (message :: messages))
+        | Kick { nick } -> 
+          assert (Nick.(=) (Nick.of_string nick) player.nick);
+          Stop messages
+        | Send_message { nick; message } -> 
+          assert (Nick.(=) (Nick.of_string nick) player.nick);
+          Continue (message :: messages))
     in
     let (responses, kicked) =
       match result with
       | Finished messages      -> (messages, false)
       | Stopped_early messages -> (messages, true)
     in
+    let responses = List.rev responses in
     let player = 
       { player with activity = Active { pending = Fqueue.empty; nonce }
                   ; last_poll = Time_ns.now () }
@@ -223,20 +242,15 @@ let expire_old_players (state:_ State.t) =
         Player.active player
         && Time_ns.Span.(>)
              (Time_ns.diff now player.last_poll) 
-             (Time_ns.Span.of_sec 10.)
+             (Time_ns.Span.of_sec 60.)
       in
       if should_expire then Some player else None)
   in
   let state =
     List.fold to_expire ~init:state ~f:(fun state player ->
-      print_s [%message "Kicking player" (player : Player.t)];
-      let (world,actions) =
-        state.handlers.nick_removed state.world (Nick.to_string player.nick)
-      in
-      let state = apply_actions { state with world } actions in
       State.set_player state { player with activity = Inactive })
   in
-  state
+  (state,())
 
 let main (handlers : _ Handlers.t) ~port =
   let state_ref =
@@ -250,7 +264,8 @@ let main (handlers : _ Handlers.t) ~port =
   let decoder = rpc_decoder state_ref in
   let () =
     every (Time.Span.of_sec 1.0) (fun () ->
-      state_ref := expire_old_players !state_ref)
+      update_state ~context:[%message "expiration loop"]
+        state_ref expire_old_players)
   in
   let%bind (_:_ Server.t) =
     Server.create
