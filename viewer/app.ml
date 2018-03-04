@@ -68,9 +68,15 @@ let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
 let on_startup ~schedule (_ : Model.t) =
   Async_kernel.return { State. schedule }
     
-let on_display ~old model state =
-  if not (Model.cutoff old model) then
-    State.schedule state Scroll
+let on_display ~(old:Model.t) (current:Model.t) state =
+  let scroll =
+    match old, current with
+    | Main_page old, Main_page current ->
+      not (Map.equal [%compare.equal: Main_page.Interaction.t]
+             old.interactions current.interactions)
+    | _ -> false
+  in
+  if scroll then State.schedule state Scroll
   
 let update_visibility m = m
                             
