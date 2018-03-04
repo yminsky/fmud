@@ -254,6 +254,20 @@ let expire_old_players (state:_ State.t) =
   in
   (state,())
 
+let rpc_respond decoder body =
+  let%bind body = Body.to_string body in
+  let response =
+    let open Or_error.Let_syntax in
+    let%bind request = Or_error.try_with (fun () -> Sexp.of_string body) in
+    Rpc.Decoder.eval decoder request
+  in
+  let response = [%sexp (response : Sexp.t Or_error.t)] in
+  print_s [%message
+    "Request" (body : string) (response : Sexp.t)];
+  Server.respond_string
+    ~headers:(Cohttp.Header.of_list ["Access-Control-Allow-Origin", "*"])
+    (Sexp.to_string response)
+
 let main (handlers : _ Handlers.t) ~port =
   let state_ref =
     ref { State.
@@ -273,19 +287,15 @@ let main (handlers : _ Handlers.t) ~port =
     Server.create
       ~on_handler_error:`Raise
       (Tcp.Where_to_listen.of_port port)
-      (fun ~body _addr _request ->
-         let%bind body = Body.to_string body in
-         let response =
-           let open Or_error.Let_syntax in
-           let%bind request = Or_error.try_with (fun () -> Sexp.of_string body) in
-           Rpc.Decoder.eval decoder request
-         in
-         let response = [%sexp (response : Sexp.t Or_error.t)] in
-         print_s [%message
-           "Request" (body : string) (response : Sexp.t)];
-         Server.respond_string
-           ~headers:(Cohttp.Header.of_list ["Access-Control-Allow-Origin", "*"])
-           (Sexp.to_string response))
+      (fun ~body _addr request ->
+         let uri = Request.uri request in
+         match Uri.path uri with
+         | "/rpc" -> rpc_respond decoder body
+         | _ ->
+           let local = Server.resolve_local_file ~docroot:"site" ~uri in
+           print_s [%message
+             "Loading local file" (local : string) (uri : Uri.t)];
+           Server.respond_with_file local)
   in
   Deferred.never ()
 

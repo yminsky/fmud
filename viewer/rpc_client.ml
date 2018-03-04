@@ -7,7 +7,7 @@ let error_s = Core_kernel.error_s
 let request rpc arg =
   let (sexp_arg,decode) = Rpc.encode rpc arg in
   let%map result =
-    Async_js.Http.post "http://localhost:8080/"
+    Async_js.Http.post "/rpc"
       ~body:(String (Sexp.to_string sexp_arg))
   in
   Or_error.bind result ~f:(fun response ->
