@@ -289,13 +289,16 @@ let main (handlers : _ Handlers.t) ~port =
       (Tcp.Where_to_listen.of_port port)
       (fun ~body _addr request ->
          let uri = Request.uri request in
-         match Uri.path uri with
-         | "/rpc" -> rpc_respond decoder body
-         | _ ->
-           let local = Server.resolve_local_file ~docroot:"site" ~uri in
+         let load_local local = 
            print_s [%message
              "Loading local file" (local : string) (uri : Uri.t)];
-           Server.respond_with_file local)
+           Server.respond_with_file local
+         in
+         match Uri.path uri with
+         | "/rpc" -> rpc_respond decoder body
+         | "/" -> load_local "site/index.html"
+         | _ ->
+           load_local (Server.resolve_local_file ~docroot:"site" ~uri))
   in
   Deferred.never ()
 
