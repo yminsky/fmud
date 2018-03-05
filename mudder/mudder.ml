@@ -285,7 +285,7 @@ let main (handlers : _ Handlers.t) ~port =
   in
   let%bind (_:_ Server.t) =
     Server.create
-      ~on_handler_error:`Raise
+      ~on_handler_error:`Ignore
       (Tcp.Where_to_listen.of_port port)
       (fun ~body _addr request ->
          let uri = Request.uri request in
