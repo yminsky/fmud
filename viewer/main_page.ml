@@ -171,17 +171,24 @@ let on_startup ~(schedule : Action.t -> unit) =
   in
   loop ()
 
+let pre text = 
+  let open Vdom in
+  Node.create "pre" [] [Node.text text]
+
 let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   let open Vdom in
   let input =
     if m.kicked then
       [ Node.create "br" [] []
-      ; Node.text "You have been kicked! Try reloading the page to log in again." ]
+      ; Node.div [Attr.style ["color", "red"]]
+          [Node.text "You have been kicked! Try reloading the page to log in again." ]]
     else
       [Node.input
          [ Attr.type_ "text"
          ; Attr.id "keep-in-view"
+         ; Attr.id "prompt"
          ; Attr.string_property "value" m.current_input
+         ; Attr.autofocus true
          ; Attr.on_input (fun _ev text -> inject (Update_input text))
          ; Attr.create "size" "80"
          ] []]
@@ -191,11 +198,9 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
       Map.data m.interactions
       |> List.bind ~f:(function
         | Input {text;posted} ->
-          [ Node.text text
-          ; Node.text (if posted then "" else "...")
-          ; Node.create "br" [][]]
+          [ pre (text ^ if posted then "" else "...") ]
         | Response text ->
-          [ Node.create "pre" [] [Node.text text]]
+          [ Node.create "em" [Attr.style [ "color", "blue"]] [pre text]]
       )
     in
     [Node.div [] interactions]

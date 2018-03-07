@@ -76,7 +76,17 @@ let on_display ~(old:Model.t) (current:Model.t) state =
              old.interactions current.interactions)
     | _ -> false
   in
-  if scroll then State.schedule state Scroll
+  let set_focus =
+    match old, current with
+    | Main_page _, Main_page _ -> false
+    | _, Main_page _ -> true
+    | _ -> false
+  in
+  if scroll then State.schedule state Scroll;
+  if set_focus then 
+    match Dom_html.getElementById_coerce "prompt" Dom_html.CoerceTo.input  with
+    | None -> ()
+    | Some i -> i##select
   
 let update_visibility m = m
                             

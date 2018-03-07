@@ -95,13 +95,14 @@ end
 
 open Vdom
 
-let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
+let view  (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   let { Model.nick; password; status; errors } = m in
-  let input name ~current update = 
+  let input name ~current  ?(autofocus=false) update = 
     [ Node.text (name ^ " ")
     ; Node.input
       [ Attr.type_ "text"
       ; Attr.string_property "value" current
+      ; Attr.autofocus autofocus
       ; Attr.on_input (fun _ev text -> inject (update text))
       ; Attr.create "size" "20"
       ] []
@@ -109,7 +110,7 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
   in
   let inputs =
     List.concat
-      [ input "nickname" ~current:nick (fun x -> Update_nick x)
+      [ input "nickname" ~current:nick (fun x -> Update_nick x) ~autofocus:true
       ; [Node.create "br" [] []]
       ; input "password" ~current:password (fun x -> Update_password x)
       ; [Node.create "br" [] []]
