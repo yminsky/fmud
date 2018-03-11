@@ -2,10 +2,10 @@
 
 set -euxo pipefail
 
-hg pull -u
+eval `opam config env`
 jbuilder build \
 	 nava/main.exe \
 	 viewer/main.bc.js
 MAIN=_build/default/nava/main.exe
-sudo setcap CAP_NET_BIND_SERVICE=+eip $(MAIN)
-$(MAIN) -p 80 | tee ~/mud-log.exe7
+sudo setcap CAP_NET_BIND_SERVICE=+eip $MAIN
+$MAIN -p 80 | tee ~/mud-log.exe7
