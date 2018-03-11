@@ -4,5 +4,5 @@ jbuilder build \
     --root=$(hg root) \
     nava/main.exe \
     nava/main.bc \
-    viewer/main.bc.js \
+    viewer/main.bc.js.gz \
     --dev
