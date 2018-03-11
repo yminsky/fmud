@@ -15,6 +15,11 @@ type door =
   }
 [@@deriving sexp]
 
+(*
+type npc =
+  { }
+*)
+
 type item =
   { in_room : bool
   ; place : string
@@ -158,6 +163,11 @@ The third has wooden abstract structures.
 The final section has ceramic structures.
 "
   }
+let death =
+  { name = "Death";
+    doors = [];
+    description =
+      "U is dead"}
 
 
 let prisons =
@@ -199,7 +209,7 @@ There is a door to the south.
 
 let init =
   { people = []
-  ; rooms = [ basic; welcome;library; prisons;statue_garden ]
+  ; rooms = [ basic; welcome;library; prisons;statue_garden;death]
   ; items = [ pebble;lantern; red_book; blue_book; green_book; hunting_knife]
   }
 
@@ -460,7 +470,7 @@ let nick_added w nick =
 
 let nick_removed w nick =
   let me = Option.value_exn ( get_person w nick)  in
-  let new_me =  { me with roomn = "Welcome"} in
+  let new_me =  { me with roomn = "Death"} in
   let nw = replace_person w new_me in
   let goodbye_message = nick ^ " vanished in a puff of smoke." in
   let actions = List.map (other_people w nick) ~f:(fun p ->
@@ -490,7 +500,7 @@ let handle_line w nick line =
   | "/inventory" :: [] -> (w, [Send_message {nick; message = inventory w nick}])
   | "/whisper" :: to_nick :: message ->
     (w, [Send_message { nick = to_nick
-                      ; message = nick ^ " whispered: " 
+                      ; message = nick ^ " whispered: "
                                   ^ String.concat ~sep:" " message }])
   | _ ->
     (* just show what was said to everyone in the same room *)
