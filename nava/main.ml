@@ -15,16 +15,19 @@ type door =
   }
 [@@deriving sexp]
 
-(*
-type npc =
-  { }
-*)
+type item_kind =
+  | Weapon of { power: int }
+  | Book of { contents: string }
+  | Lamp
+  | Useless
+[@@deriving sexp]
 
 type item =
   { in_room : bool
   ; place : string
   ; description : string
   ; name : string
+  ; kind : item_kind
   }
 [@@deriving sexp]
 
@@ -96,29 +99,47 @@ let help = "
 
 let pebble = { in_room = true;
                place = "Basic";
-               description = "
-a normal gray pebble";
-               name = "pebble"}
+               description = "a normal gray pebble";
+               name = "pebble";
+               kind = Useless}
 let lantern = { in_room = true;
                 place = "Welcome";
-                description = "
-an obsidian lantern with a small handel.
-The flame is lit.";
-                name = "obsidian lantern"}
+                description = "an obsidian lantern with a small handle. \
+                               The flame is lit.";
+                name = "obsidian lantern";
+                kind = Lamp}
 let red_book = {in_room = true;
                 place = "Library";
                 description = "
 a red book with a lether cover.
 The name is Monsters Through the Ages";
-                name = "monsters through the ages"}
+                name = "monsters through the ages";
+                kind = Book  {contents=
+                                "To learn monster spells, it is best \
+                                 to first have a good grip on Animal \
+                                 Summoning Spells. The simpolist of \
+                                 these spells is the dog summoning \
+                                 spell. Simply say 'Maki roll' and a \
+                                 dog will appear!"}
+               }
 
 let green_book = {in_room = true;
                   place = "Library";
-                  description = "
+                  description = String.strip "
 a green, well worn book.
 The name is Runes for Dummies.
 There is a lock on the cover.";
-                  name = "runes for dummies"}
+                  name = "runes for dummies";
+                  kind = Book {contents= String.strip "
+The art of runes is an amazing, but nearly lost art. Many people \
+assume that Runes must be boring, because not many people do it! The \
+true reason is the difficulty. This book is desinged to get rid of the  \
+barrier of difficulty. Here are three of the most commen runes found \
+in older towns.
+   :*: means do not enter
+   {^# means Welcome
+   !:! means ice cream"}
+                 }
 let blue_book = {in_room = true;
                  place = "Library";
                  description = "
@@ -126,13 +147,26 @@ a blue flower on the cover.
 It looks good as new.
 The name is blurred but you can make out the title
 Flowers of the World";
-                 name = "flowers of the world"}
+                 name = "flowers of the world";
+                 kind = Book {contents = "
+                 When traveling, it is wise to
+                 look for certain flowers. Some of them
+                 are fragrant or beautiful of course, but
+                 many of the rarest flowers are also worth
+                 a lot of money. The rarest of all the 
+                 flowers is the Blue Raven, depicted on the 
+                 cover. It is a blue tulip with five pink 
+                 dots on each petal. Under some conditions, 
+                 the flower could save a person seconds from 
+                 death.
+                "}}
 let hunting_knife = {in_room = true;
                      place = "Prisons";
                      description = "
 a small curved hunting knife.
 It has a lether handle and a carving of a flower on the blade.";
-                     name = "hunting knife"}
+                     name = "hunting knife";
+                     kind = Weapon {power = 2}}
 
 (* Rooms *)
 
@@ -216,9 +250,9 @@ let init =
 (*
    | ██   ██ ███████ ██      ██████  ███████ ██████  ███████
    | ██   ██ ██      ██      ██   ██ ██      ██   ██ ██
-   | ███████ █████   ██      ██████  █████   ██████  ███████
+   | ███████ █████   ██      █████���  █████   █████���  ███████
    | ██   ██ ██      ██      ██      ██      ██   ██      ██
-   | ██   ██ ███████ ███████ ██      ███████ ██   ██ ███████
+   | █��   ██ █████���█ ███████ ██      ███████ ██   ██ ███████
 *)
 
 let get_person w nick =
@@ -253,9 +287,9 @@ let replace_person w person =
   let people = List.map w.people ~f:(fun p -> (if p.nick = person.nick then person else p)) in
   {w with people = people}
 (*
-   |  █████   ██████ ████████ ██  ██████  ███    ██ ███████
+   |  █████   ██████ ████████ ██  ██████  ███    ██ ��█████�����
    | ██   ██ ██         ██    ██ ██    ██ ████   ██ ██
-   | ███████ ██         ██    ██ ██    ██ ██ ██  ██ ███████
+   | ████��██ ██         ██    ██ ██    ██ ██ ██  ██ ███████
    | ██   ██ ██         ██    ██ ██    ██ ██  ██ ██      ██
    | ██   ██  ██████    ██    ██  ██████  ██   ████ ███████
 *)
