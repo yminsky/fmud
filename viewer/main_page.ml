@@ -48,7 +48,7 @@ module Model = struct
     { t with current_input }
 
   let add_response t response =
-    let previous_response = 
+    let previous_response =
       Option.bind (Map.max_elt t.interactions) ~f:(fun (max_i,max_interaction) ->
         match max_interaction with
         | Input _ -> None
@@ -73,7 +73,7 @@ module Model = struct
     | Error err -> { t with last_error = Some (Incr.now (), err)
                           ; kicked = true }
     | Ok { responses; kicked } ->
-      let t = 
+      let t =
         List.fold responses ~init:t ~f:(fun t response ->
           add_response t response)
       in
@@ -84,8 +84,8 @@ module Model = struct
     match resp with
     | Error err -> { t with last_error = Some (Incr.now (), err) }
     | Ok id ->
-      { t with 
-        interactions = 
+      { t with
+        interactions =
           Map.change t.interactions id ~f:(function
             | Some (Input { text; _ }) ->
               Some (Input { text; posted = true })
@@ -139,19 +139,19 @@ let maybe_send_input (model:Model.t) ~(schedule:Action.t -> unit) =
     | Some (id,input) ->
       let nonce = model.nonce in
       don't_wait_for (
-        let%map response = Rpc_client.request P.input { nonce; input } in        
+        let%map response = Rpc_client.request P.input { nonce; input } in
         schedule (Input_response (Or_error.map response ~f:(fun () -> id))));
       { model with in_flight = true }
 
 
-let apply_action 
+let apply_action
       (action:Action.t)
       (model:Model.t)
       ~(schedule:Action.t -> unit)
   =
   if model.kicked then model
   else (
-    let model = 
+    let model =
       match action with
       | Submit_input        -> Model.submit_input model
       | Poll_response resp  -> Model.poll_response model resp
@@ -171,7 +171,7 @@ let on_startup ~(schedule : Action.t -> unit) =
   in
   loop ()
 
-let pre text = 
+let pre text =
   let open Vdom in
   Node.create "pre" [] [Node.text text]
 
@@ -185,7 +185,6 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
     else
       [Node.input
          [ Attr.type_ "text"
-         ; Attr.id "keep-in-view"
          ; Attr.id "prompt"
          ; Attr.string_property "value" m.current_input
          ; Attr.autofocus true
@@ -205,7 +204,7 @@ let view (m : Model.t) ~(inject : Action.t -> Vdom.Event.t) =
     in
     [Node.div [] interactions]
   in
-  Node.div [ ] 
+  Node.div [ ]
     (List.concat
        [ entries
        ; input

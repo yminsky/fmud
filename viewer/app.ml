@@ -6,7 +6,7 @@ module Model = struct
     | Login of Login.Model.t
     | Main_page of Main_page.Model.t
   [@@deriving compare]
-                 
+
   let empty = Login Login.Model.empty
   let cutoff t1 t2 =
     compare t1 t2 = 0
@@ -20,7 +20,7 @@ module Action = struct
     | Login of Login.Action.t
     | Scroll
   [@@deriving sexp, variants]
-  
+
   let should_log (_:t) = true
 end
 
@@ -61,19 +61,20 @@ let apply_action (action:Action.t) (model:Model.t) (state:State.t) : Model.t=
   | Report_nonce nonce ->
     Main_page.on_startup ~schedule:(State.schedule_as state Action.main_page);
     Main_page (Main_page.Model.create nonce)
-  | Scroll -> 
-    Js_misc.scroll ();
+  | Scroll ->
+    Js_misc.scroll ~id:"prompt" ();
     model
 
 let on_startup ~schedule (_ : Model.t) =
   Async_kernel.return { State. schedule }
-    
+
 let on_display ~(old:Model.t) (current:Model.t) state =
   let scroll =
     match old, current with
     | Main_page old, Main_page current ->
       not (Map.equal [%compare.equal: Main_page.Interaction.t]
              old.interactions current.interactions)
+      || not (String.equal old.current_input current.current_input)
     | _ -> false
   in
   let set_focus =
@@ -83,22 +84,22 @@ let on_display ~(old:Model.t) (current:Model.t) state =
     | _ -> false
   in
   if scroll then State.schedule state Scroll;
-  if set_focus then 
+  if set_focus then
     match Dom_html.getElementById_coerce "prompt" Dom_html.CoerceTo.input  with
     | None -> ()
     | Some i -> i##select
-  
+
 let update_visibility m = m
-                            
+
 let key_handler ~(inject : Action.t -> Vdom.Event.t) =
   let open Vdom in
   Attr.on_keypress (fun ev ->
     match Dom_html.Keyboard_code.of_event ev with
     | Enter ->  inject Submit_input
     | _ -> Event.Ignore)
-    
+
 let view (m : Model.t Incr.t) ~(inject : Action.t -> Vdom.Event.t) =
-  let open Incr.Let_syntax in 
+  let open Incr.Let_syntax in
   let open Vdom in
   let%map m = m in
   let inner =
