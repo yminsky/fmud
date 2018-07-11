@@ -1,0 +1,6 @@
+(library
+  (name mud_common)
+  (flags (:standard -safe-string -short-paths))
+  (libraries base)
+  (preprocess (pps ppx_jane))
+  )

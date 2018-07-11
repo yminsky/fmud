@@ -1,0 +1,12 @@
+(executable
+ (name main)
+ (flags :standard -safe-string)
+ (libraries incr_dom mud_common)
+ (preprocess (pps js_of_ocaml-ppx ppx_jane ppx_driver.runner))
+ (js_of_ocaml (flags +weak.js))
+ )
+
+(rule
+ (targets main.bc.js.gz)
+ (deps main.bc.js)
+ (action (run gzip -k main.bc.js)))

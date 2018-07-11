@@ -1,8 +1,0 @@
-(jbuild_version 1)
-
-(executables
- ((names (main))
-  (flags (:standard -safe-string -short-paths))
-  (libraries (core mudder))
-  (preprocess (pps (ppx_jane)))
-  ))
