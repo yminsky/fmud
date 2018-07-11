@@ -2,11 +2,10 @@
  (name main)
  (flags :standard -safe-string)
  (libraries incr_dom mud_common)
- (preprocess (pps js_of_ocaml-ppx ppx_jane ppx_driver.runner))
- (js_of_ocaml (flags +weak.js))
+ (preprocess (pps ppx_jane js_of_ocaml-ppx))
+ (js_of_ocaml)
  )
 
-(rule
- (targets main.bc.js.gz)
- (deps main.bc.js)
- (action (run gzip -k main.bc.js)))
+(alias
+ (name default)
+ (deps main.bc.js))
